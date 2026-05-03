@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildRawSignature, processScanResult } from "./scan";
+import { buildRawSignature, processScanResult } from "../../../src/services/scan";
 
 describe("scan", () => {
   it("builds stable raw signature shape", () => {

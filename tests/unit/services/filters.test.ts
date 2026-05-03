@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { expandTopicCandidates, lexicalTopicScore, parseTopics } from "./filters";
+import { expandTopicCandidates, lexicalTopicScore, parseTopics } from "../../../src/services/filters";
 
 describe("filters", () => {
   it("parses topics by comma/semicolon/newline", () => {

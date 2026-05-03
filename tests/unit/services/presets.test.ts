@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { deletePresetForHost, loadPresetForHost, normalizePresetHost, savePresetForHost } from "./presets";
-import type { PopupSettings } from "../types";
+import { deletePresetForHost, loadPresetForHost, normalizePresetHost, savePresetForHost } from "../../../src/services/presets";
+import type { PopupSettings } from "../../../src/types";
 
 // Mock chrome storage wrappers
-vi.mock("../chrome/storage", () => {
+vi.mock("../../../src/chrome/storage", () => {
   const store: Record<string, unknown> = {};
   return {
     getLocal: async (keys?: string[]) => {
@@ -20,7 +20,7 @@ vi.mock("../chrome/storage", () => {
 
 // Access the mutable store used inside the mock for test reset.
 async function clearStore() {
-  const mod = await import("../chrome/storage");
+  const mod = await import("../../../src/chrome/storage");
   await mod.setLocal({ domainPresets: undefined });
 }
 

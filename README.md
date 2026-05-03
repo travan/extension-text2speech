@@ -1,120 +1,127 @@
-# Topic-aware Text Reader (Chrome Extension MVP)
+# Topic-Aware Text Reader (Chrome Extension)
 
-Extension đọc văn bản trên bất kỳ web nào, lọc đoạn theo topic user nhập, rồi đọc bằng giọng tùy chỉnh cho từng đoạn.
+A Chrome Extension that scans visible content on any page, filters relevant segments by topic, and reads them aloud with configurable voices.
 
-## Migration status (React + TypeScript + Zustand)
+This repository contains the current React + TypeScript implementation and keeps legacy MVP files in a separate folder for side-by-side comparison.
 
-Project da bat dau migrate sang stack moi:
+## Key Features
 
-- Vite + CRXJS cho build MV3
-- React + TypeScript cho popup va results page
-- Zustand cho state management popup
-- Content script van giu logic cu (duoc goi qua entry TypeScript de migration an toan)
-- Da tach service scan/filter sang TypeScript + unit tests
-- Da nang results page React voi paging + start/stop capture + goto segment
+- Topic-based text scanning and filtering on web pages
+- Hybrid ranking (keyword + semantic/embedding scoring)
+- Beginner mode that works without an OpenAI API key
+- Optional advanced AI mode with OpenAI API key
+- Per-item voice selection before playback
+- Domain presets (topic, threshold, mode, model, default voice)
+- Feed auto-scan for dynamic social feeds (Threads, Facebook, X)
+- Dedicated results page with pagination and jump-to-segment
+- Popup UI with configuration and results tabs
+- Speech controls: pause, resume, and stop
 
-### Thu muc legacy de review
+## Tech Stack
 
-Tat ca file implementation cu da duoc chuyen vao thu muc `legacy/`:
+- Vite + CRXJS (Manifest V3 build)
+- React + TypeScript
+- Zustand for popup state management
+- Vitest for unit tests
+- Playwright for end-to-end tests
 
-- `legacy/content.js`
-- `legacy/manifest.json`
-- `legacy/popup*.js`, `legacy/popup.html`, `legacy/popup.css`
-- `legacy/results.js`, `legacy/results.html`, `legacy/results.css`
+## Project Structure
 
-Ban co the review side-by-side giua `legacy/` va `src/`.
+- `src/`: active source code
+- `legacy/`: previous MVP implementation kept for reference
+- `dist/`: build output for loading into Chrome (generated)
 
-Lenh moi:
+## Getting Started
 
-- `npm install`
-- `npm run dev`
-- `npm run build`
-- `npm run typecheck`
-- `npm run test:unit`
-- `npm run test:e2e:smoke`
-- `npm run test:e2e:flow`
+### Prerequisites
 
-Thu muc build de load vao Chrome: `dist/`
+- Node.js 20+ (recommended)
+- npm
+- Google Chrome
 
-## Cách chạy
+### Install
 
-1. Mở Chrome -> `chrome://extensions`
-2. Bật `Developer mode`
-3. Chọn `Load unpacked`
-4. Trỏ đến thư mục dự án này
-5. Mở trang web bất kỳ rồi bấm icon extension
+```bash
+npm install
+```
 
-## Tính năng hiện có
+### Development
 
-- Quét đoạn text hiển thị trên trang
-- Gộp các đoạn ngắn dễ bị ngắt (hữu ích cho feed social)
-- Lọc theo nhiều topic
-- `Hybrid score`: keyword + semantic (embeddings)
-- Mặc định chế độ dễ dùng, không cần OpenAI API key
-- Chọn voice riêng cho từng đoạn trước khi đọc
-- Lưu preset theo domain (topic, threshold, chế độ lọc, model, default voice)
-- Auto-scan feed theo chu kỳ để bắt bài mới khi cuộn (Threads/Facebook/X)
-- Theo dõi feed liên tục và lưu kết quả vào trang riêng `results.html`
-- Trang kết quả có phân trang (20/50/100 dòng mỗi trang)
-- Popup có 2 màn: `Cấu hình` và `Kết quả` (kết quả có phân trang ngay trong popup)
-- Topic/config được tự động lưu (autosave), mở lại popup không cần chọn lại
-- Mỗi item có nút `Đọc item`, click vào item để bung detail đầy đủ
-- Có tùy chọn giọng `Tiếng Việt miễn phí (tự động)` không cần API
-- Có nút `Tạm dừng` / `Tiếp tục` / `Dừng đọc` ngay màn kết quả
+```bash
+npm run dev
+```
 
-## Dùng ngay cho người mới (không cần AI)
+### Type Check
 
-1. Giữ `Chế độ lọc = Dễ dùng (không cần API)`
-2. Chọn `Topic gợi ý nhanh` hoặc tự nhập topic
-3. Bấm `Quét & Lọc` rồi bấm `Đọc`
+```bash
+npm run typecheck
+```
 
-Mẹo: ô topic hỗ trợ ngăn cách bằng `,` hoặc `;` hoặc xuống dòng.
+### Build
 
-## Dùng AI nâng cao (tuỳ chọn)
+```bash
+npm run build
+```
 
-1. Chọn `Chế độ lọc = AI nâng cao`
-2. Nhập `OpenAI API key`
-3. Bấm `Quét & Lọc`
+## Run Tests
 
-Nếu thiếu API key, extension tự fallback về lọc cơ bản.
+```bash
+npm run test:unit
+npm run test:e2e:smoke
+npm run test:e2e:flow
+```
 
-## Dùng preset theo domain
+Run full E2E suite:
 
-- Chỉnh cấu hình theo ý muốn trên một trang (vd `threads.com`)
-- Bấm `Lưu preset domain`
-- Lần sau bấm `Nạp lại preset` để lấy lại nhanh cấu hình của domain đó
+```bash
+npm run test:e2e
+```
 
-## Dùng auto-scan feed
+## Load Extension in Chrome
 
-1. Tick `Auto-scan feed (khi popup đang mở)`
-2. Chỉnh `Chu kỳ auto-scan` (2-15 giây)
-3. Cuộn feed và giữ popup mở, extension sẽ tự quét lại
+1. Open `chrome://extensions`.
+2. Enable Developer mode.
+3. Click Load unpacked.
+4. Select the `dist/` folder (after `npm run build`).
+5. Open any website and click the extension icon.
 
-Auto-scan chỉ re-score khi phát hiện feed có thay đổi, giúp giảm gọi embeddings không cần thiết.
+## Usage Guide
 
-## Luồng mới: main menu + trang kết quả riêng
+### Quick Start (No API Key)
 
-1. Trong popup: nhập topic rồi bấm `Bắt đầu theo dõi feed`
-2. Extension mở trang `Feed Capture Results` (riêng)
-3. Quay lại tab nguồn để lướt feed
-4. Mở lại tab kết quả để xem các đoạn đã lưu rõ ràng
+1. Keep filter mode in beginner/basic mode.
+2. Enter one or more topics.
+3. Click scan/filter, then click read.
 
-Trang kết quả có các nút:
-- `Làm mới`
-- `Bật theo dõi` / `Dừng theo dõi`
-- `Xóa lưu trữ`
-- `Tới đoạn` để nhảy về đúng đoạn trong tab nguồn
-- `Trang trước` / `Trang sau` + chọn `Số dòng/trang`
+Topic input supports separators such as commas, semicolons, or new lines.
 
-## Gợi ý cho feed social (Threads/Facebook/X)
+### Advanced AI Mode (Optional)
 
-- Cuộn trang xuống để load thêm bài trước khi quét
-- Topic nên cụ thể (ví dụ: `tâm linh, luân hồi, thiền`) để lọc tốt hơn
-- Xem dòng `Từ khóa trúng` dưới mỗi đoạn để kiểm tra hệ thống đã match đúng ý chưa
-- Nếu giữ quá ít đoạn, giảm `Ngưỡng lọc`
+1. Switch to advanced AI mode.
+2. Provide your OpenAI API key.
+3. Start scanning/filtering.
 
-## Hạn chế hiện tại
+If no API key is provided, the extension falls back to basic filtering.
 
-- Semantic dùng API embeddings nên tốn token
-- Để giới hạn chi phí, semantic chỉ chấm tối đa 80 đoạn mỗi lần quét
-- Dùng local `speechSynthesis` nên chất giọng phụ thuộc máy/browser
+### Domain Presets
+
+1. Configure settings on a target domain (for example, threads.com).
+2. Save a domain preset.
+3. Reload the preset later for fast reuse.
+
+### Feed Capture Workflow
+
+1. Start feed capture from the popup.
+2. Continue browsing/scrolling the source feed tab.
+3. Open the results page to review captured segments.
+4. Use pagination, tracking controls, and jump-to-segment navigation.
+
+## Current Limitations
+
+- Semantic scoring may consume API tokens.
+- To control cost, semantic scoring is capped per scan.
+- Speech quality depends on local browser/device `speechSynthesis` voices.
+
+## License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
