@@ -1,0 +1,131 @@
+:root {
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(130deg, #fff7ed 0%, #ffedd5 40%, #fff7ed 100%);
+}
+
+.results-root {
+  box-sizing: border-box;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+header h1 {
+  margin: 0;
+}
+
+header p {
+  margin-top: 6px;
+  color: #7c2d12;
+}
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.toolbar input {
+  width: 120px;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  background: #c2410c;
+  color: white;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.stats {
+  margin-top: 12px;
+  color: #7c2d12;
+}
+
+.items {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.pager {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #fdba74;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.actions {
+  margin-top: 8px;
+}
+
+.topic-options {
+  margin-top: 20px;
+}
+
+.topic-options h2 {
+  font-size: 1rem;
+  margin: 0 0 8px;
+  color: #7c2d12;
+}
+
+.topic-options-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.topic-option-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.topic-option-text {
+  flex: 1;
+  font-size: 0.9rem;
+  color: #1f2937;
+  word-break: break-word;
+}
+
+.topic-option-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-danger {
+  background: #b91c1c;
+}
+
+.btn-danger:hover {
+  background: #991b1b;
+}

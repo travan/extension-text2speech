@@ -1,0 +1,282 @@
+:root {
+  --bg: #f5f2eb;
+  --panel: #fffaf2;
+  --ink: #2a2520;
+  --accent: #b54f21;
+  --accent-soft: #f3c6a6;
+  --border: #dbcdb8;
+}
+
+body {
+  margin: 0;
+  width: 420px;
+  max-height: 620px;
+  overflow: auto;
+  font-family: "Avenir Next", "Nunito Sans", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 10% 10%, #fff4e2 0%, transparent 40%),
+    radial-gradient(circle at 90% 10%, #f0e8dc 0%, transparent 40%),
+    var(--bg);
+}
+
+main {
+  padding: 12px;
+}
+
+h1 {
+  margin: 0 0 2px;
+  font-size: 20px;
+}
+
+#domainInfo {
+  margin: 0 0 10px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+#topicHint {
+  margin: 4px 0 6px;
+  font-size: 11px;
+  color: #6b5f52;
+}
+
+#voiceHint {
+  margin: 4px 0 6px;
+  font-size: 11px;
+  color: #6b5f52;
+}
+
+label {
+  display: block;
+  margin: 8px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+textarea,
+select,
+input[type="range"],
+input[type="text"],
+input[type="password"] {
+  width: 100%;
+}
+
+textarea,
+select,
+input[type="text"],
+input[type="password"] {
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  background: white;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.actions-secondary button {
+  background: #6c523f;
+}
+
+.deep-scan-presets {
+  margin-top: 6px;
+}
+
+.deep-scan-presets button {
+  flex: 1;
+  font-size: 11px;
+  padding: 6px 8px;
+  background: #7a6451;
+}
+
+.deep-scan-presets button.is-active {
+  background: #3f7e4f;
+  box-shadow: 0 0 0 2px rgba(63, 126, 79, 0.22);
+}
+
+details {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  background: #fffdf8;
+}
+
+summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--accent);
+  color: white;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#status {
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+#resultsMeta {
+  margin: 8px 0;
+  font-size: 12px;
+  color: #6b5f52;
+}
+
+.pager-actions {
+  align-items: center;
+}
+
+#popupPageInfo {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+#segments {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+#detailPanel {
+  margin-top: 10px;
+  background: #fffdf8;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+#detailPanel h3 {
+  margin: 0 0 8px;
+}
+
+#detailMeta {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #6b5f52;
+}
+
+#detailText {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.segment-item {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.segment-item.is-reading {
+  border-color: #3f7e4f;
+  box-shadow: 0 0 0 2px rgba(63, 126, 79, 0.18);
+}
+
+.segment-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.segment-head-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.reading-indicator {
+  display: none;
+  font-size: 10px;
+  font-weight: 700;
+  color: #1f5b2f;
+  background: #d9f1e0;
+  border: 1px solid #9bc9a8;
+  border-radius: 999px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.segment-item.is-reading .reading-indicator {
+  display: inline-flex;
+}
+
+.segment-score {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.segment-tags {
+  margin: 4px 0 6px;
+  font-size: 11px;
+  color: #6b5f52;
+}
+
+.segment-text {
+  font-size: 12px;
+  line-height: 1.45;
+  max-height: 92px;
+  overflow: auto;
+  cursor: pointer;
+}
+
+.segment-item.expanded .segment-text {
+  max-height: none;
+  overflow: visible;
+}
+
+.focus-btn {
+  background: var(--accent-soft);
+  color: #44281a;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.read-one-btn {
+  background: #3f7e4f;
+  color: white;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.pause-toggle-btn {
+  background: #8e6f2a;
+  color: white;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.scan-read-btn {
+  background: #2a5f8e;
+  color: white;
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.pick-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.pick-row input[type="checkbox"] {
+  width: auto;
+}

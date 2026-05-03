@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Topic Reader</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <section id="configView">
+        <h1>Topic Reader</h1>
+        <p id="domainInfo">Domain: -</p>
+
+        <label for="topics">Topic (cách nhau bởi dấu phẩy)</label>
+        <textarea id="topics" rows="3" placeholder="tâm linh, thiền định, chữa lành"></textarea>
+
+        <label for="threshold">Ngưỡng lọc: <span id="thresholdValue">0.45</span></label>
+        <input id="threshold" type="range" min="0" max="1" step="0.05" value="0.45" />
+
+        <label for="filterMode">Chế độ lọc</label>
+        <select id="filterMode">
+          <option value="basic">Dễ dùng (không cần API)</option>
+          <option value="ai">AI nâng cao (cần OpenAI API key)</option>
+        </select>
+
+        <label for="topicPreset">Topic gợi ý nhanh</label>
+        <select id="topicPreset">
+          <option value="">Tự nhập topic</option>
+          <option value="tâm linh, thiền định, chữa lành, năng lượng">Tâm linh</option>
+          <option value="công nghệ, AI, lập trình, startup">Công nghệ</option>
+          <option value="kinh doanh, marketing, bán hàng, thương hiệu">Kinh doanh</option>
+          <option value="sức khỏe, dinh dưỡng, tập luyện, giấc ngủ">Sức khỏe</option>
+          <option value="giải trí, phim, âm nhạc, người nổi tiếng">Giải trí</option>
+        </select>
+        <p id="topicHint">Bạn có thể tự nhập topic riêng, ngăn cách bằng dấu phẩy, chấm phẩy hoặc xuống dòng.</p>
+
+        <label for="defaultVoice">Default voice cho đoạn mới</label>
+        <select id="defaultVoice"></select>
+        <p id="voiceHint">Gợi ý: chọn "Tiếng Việt miễn phí (tự động)" để dùng giọng Việt free của trình duyệt.</p>
+
+        <details id="aiAdvancedBox">
+          <summary>Cấu hình AI nâng cao</summary>
+          <label for="apiKey">OpenAI API key</label>
+          <input id="apiKey" type="password" placeholder="sk-..." />
+
+          <label for="embeddingModel">Embedding model</label>
+          <input id="embeddingModel" type="text" value="text-embedding-3-small" />
+        </details>
+
+        <label class="pick-row">
+          <input id="autoScanEnabled" type="checkbox" />
+          Auto-scan feed (khi popup đang mở)
+        </label>
+
+        <label class="pick-row">
+          <input id="deepScanEnabled" type="checkbox" checked />
+          Scan sâu (bung nội dung ẩn + load thêm trước khi quét)
+        </label>
+
+        <label for="deepScanLevel">Độ sâu scan: <span id="deepScanLevelValue">3</span></label>
+        <input id="deepScanLevel" type="range" min="1" max="5" step="1" value="3" />
+        <div class="actions deep-scan-presets">
+          <button id="scanPresetFastBtn" type="button">Nhanh (M2)</button>
+          <button id="scanPresetBalancedBtn" type="button">Cân bằng (M3)</button>
+          <button id="scanPresetDeepBtn" type="button">Rất sâu (M5)</button>
+        </div>
+
+        <label for="autoScanInterval">Chu kỳ auto-scan (giây): <span id="autoScanIntervalValue">4</span></label>
+        <input id="autoScanInterval" type="range" min="2" max="15" step="1" value="4" />
+
+        <div class="actions">
+          <button id="scanBtn">Quét & Lọc</button>
+          <button id="showResultsBtn" type="button">Xem kết quả</button>
+        </div>
+
+        <div class="actions">
+          <button id="playBtn" disabled>Đọc</button>
+          <button id="stopBtn" disabled>Dừng</button>
+        </div>
+
+        <div class="actions">
+          <button id="startCaptureBtn" type="button">Bắt đầu theo dõi feed</button>
+          <button id="stopCaptureBtn" type="button">Dừng theo dõi</button>
+        </div>
+
+        <div class="actions actions-secondary">
+          <button id="openResultsBtn" type="button">Mở tab kết quả (tuỳ chọn)</button>
+        </div>
+
+        <div class="actions actions-secondary">
+          <button id="savePresetBtn" type="button">Lưu preset domain</button>
+          <button id="reloadPresetBtn" type="button">Nạp lại preset</button>
+        </div>
+
+        <p id="status">Chưa quét trang.</p>
+      </section>
+
+      <section id="resultsView" hidden>
+        <div class="actions">
+          <button id="backConfigBtn" type="button">Quay lại cấu hình</button>
+          <button id="scanInResultsBtn" type="button">Quét & Lọc ngay</button>
+          <button id="refreshResultsBtn" type="button">Làm mới danh sách</button>
+        </div>
+        <div class="actions">
+          <button id="stopInResultsBtn" type="button">Dừng đọc</button>
+        </div>
+        <p id="resultsMeta">Chưa có kết quả.</p>
+        <div class="actions pager-actions">
+          <label for="popupPageSize">Dòng/trang</label>
+          <select id="popupPageSize">
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+          </select>
+          <button id="popupPrevBtn" type="button">Trang trước</button>
+          <span id="popupPageInfo">Trang 1/1</span>
+          <button id="popupNextBtn" type="button">Trang sau</button>
+        </div>
+        <section id="segments"></section>
+        <section id="detailPanel" hidden>
+          <h3>Chi tiết item</h3>
+          <p id="detailMeta"></p>
+          <p id="detailText"></p>
+          <div class="actions">
+            <button id="detailReadBtn" type="button">Đọc item này</button>
+            <button id="detailFocusBtn" type="button">Mở trong thread</button>
+            <button id="detailCloseBtn" type="button">Đóng chi tiết</button>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <template id="segmentTemplate">
+      <article class="segment-item">
+        <div class="segment-head">
+          <strong class="segment-score"></strong>
+          <div class="segment-head-actions">
+            <span class="reading-indicator" aria-live="polite">Đang đọc</span>
+            <button class="read-one-btn" type="button">Đọc item</button>
+            <button class="pause-toggle-btn" type="button">Tạm dừng</button>
+            <button class="scan-read-btn" type="button">Quét + đọc</button>
+            <button class="focus-btn" type="button">Tới đoạn</button>
+          </div>
+        </div>
+        <p class="segment-tags"></p>
+        <p class="segment-text"></p>
+        <label>
+          Voice
+          <select class="voice-select"></select>
+        </label>
+        <label class="pick-row">
+          <input class="pick-checkbox" type="checkbox" checked />
+          Đọc đoạn này
+        </label>
+      </article>
+    </template>
+
+    <script src="popup.dom.js"></script>
+    <script src="popup.filters.js"></script>
+    <script src="popup.actions.js"></script>
+    <script src="popup.scan.js"></script>
+    <script src="popup.scan.actions.js"></script>
+    <script src="popup.speech.js"></script>
+    <script src="popup.view.js"></script>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

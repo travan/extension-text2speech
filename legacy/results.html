@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Feed Capture Results</title>
+    <link rel="stylesheet" href="results.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Feed Capture Results</h1>
+        <p id="meta">Nguồn: -</p>
+      </header>
+
+      <section class="toolbar">
+        <label for="tabIdInput">Tab ID nguồn</label>
+        <input id="tabIdInput" type="number" min="1" />
+        <button id="bindTabBtn" type="button">Kết nối tab</button>
+        <button id="refreshBtn" type="button">Làm mới</button>
+        <button id="startBtn" type="button">Bật theo dõi</button>
+        <button id="stopBtn" type="button">Dừng theo dõi</button>
+        <button id="clearBtn" type="button">Xóa lưu trữ</button>
+      </section>
+
+      <p id="status">Đang tải...</p>
+
+      <section id="stats" class="stats"></section>
+      <section class="pager">
+        <label for="pageSizeSelect">Số dòng/trang</label>
+        <select id="pageSizeSelect">
+          <option value="20">20</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+        </select>
+        <button id="prevPageBtn" type="button">Trang trước</button>
+        <span id="pageInfo">Trang 1/1</span>
+        <button id="nextPageBtn" type="button">Trang sau</button>
+      </section>
+      <section id="items" class="items"></section>
+    </main>
+
+    <template id="itemTemplate">
+      <article class="card">
+        <div class="head">
+          <strong class="score"></strong>
+          <span class="time"></span>
+        </div>
+        <p class="keywords"></p>
+        <p class="text"></p>
+        <div class="actions">
+          <button class="goto" type="button">Tới đoạn</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="results.js"></script>
+  </body>
+</html>
