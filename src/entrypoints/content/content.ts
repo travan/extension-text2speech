@@ -2,8 +2,38 @@ const MIN_TEXT_LENGTH = 30;
 const MAX_TEXT_LENGTH = 1600;
 const MAX_CAPTURE_ITEMS = 5000;
 
-const THREAD_SELECTOR = ["article", "[role='article']", "section", "li"].join(",");
-const BLOCK_SELECTOR = ["article", "section", "p", "li", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6", "span"].join(",");
+const THREAD_SELECTOR = [
+  "article",
+  "[role='article']",
+  "div[role='article']",
+  "[data-pressable-container='true']",
+  "[data-ad-preview='message']",
+  "[data-testid='post_message']",
+].join(",");
+const CONTENT_CONTAINER_SELECTOR = [
+  "article",
+  "[role='article']",
+  "div[role='article']",
+  "[data-pressable-container='true']",
+  "[data-ad-preview='message']",
+  "[data-testid='post_message']",
+].join(",");
+const BLOCK_SELECTOR = ["article", "p", "li", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6"].join(",");
+const FALLBACK_BLOCK_SELECTOR = [
+  "article",
+  "[role='article']",
+  "section",
+  "p",
+  "li",
+  "blockquote",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "span",
+].join(",");
 
 const STOP_WORDS = new Set([
   "và", "là", "của", "cho", "với", "một", "những", "các", "được", "trong", "khi", "này", "đó", "đang", "đến",
@@ -152,6 +182,14 @@ function lexicalTopicScore(text: string, topics: string[]): number {
       continue;
     }
 
+    const allShortTokens = topicTokens.every((token) => token.length <= 2);
+    if (allShortTokens) {
+      if (topicTokens.length === 1 && textTokens.has(topicTokens[0])) {
+        best = Math.max(best, 1);
+      }
+      continue;
+    }
+
     let matched = 0;
     for (const token of topicTokens) {
       if (hasApproxTokenMatch(textTokens, token)) matched += 1;
@@ -231,11 +269,292 @@ function extractTextForNode(node: Element): string {
   const clone = node.cloneNode(true);
   if (!(clone instanceof Element)) return normalizeWhitespace(node.textContent ?? "");
   expandHiddenTextInTree(clone);
-  return normalizeWhitespace(clone.textContent ?? "");
+
+  const fullRaw = normalizeWhitespace((node as HTMLElement).innerText ?? "") || normalizeWhitespace(clone.textContent ?? "");
+  const bodyOnly = extractBodyTextFromThreadsFeedRoot(node);
+  const raw = findThreadsFeedRoot(node)
+    ? (bodyOnly || fullRaw)
+    : bodyOnly.length >= Math.max(MIN_TEXT_LENGTH, Math.floor(fullRaw.length * 0.35))
+      ? bodyOnly
+      : fullRaw;
+  return sanitizeExtractedText(raw);
+}
+
+function findThreadsFeedRoot(node: Element): HTMLElement | null {
+  const candidate = node.closest("[data-pagelet^='threads_feed_'], [data_pagelet^='threads_feed_']");
+  return candidate instanceof HTMLElement ? candidate : null;
+}
+
+function isLikelyThreadsContentChild(node: Element): boolean {
+  const container = node.matches(CONTENT_CONTAINER_SELECTOR)
+    ? node
+    : node.querySelector(CONTENT_CONTAINER_SELECTOR);
+  if (container && isVisible(container)) {
+    const text = normalizeWhitespace((container as HTMLElement).innerText || container.textContent || "");
+    if (text.length >= MIN_TEXT_LENGTH) {
+      return true;
+    }
+  }
+
+  const spanText = normalizeWhitespace(
+    [...node.querySelectorAll("span")]
+      .map((span) => (span as HTMLElement).innerText || span.textContent || "")
+      .join(" "),
+  );
+  return spanText.length >= MIN_TEXT_LENGTH;
+}
+
+function isLikelyThreadsListNode(node: Element): boolean {
+  if (node.children.length <= 3) return false;
+
+  const candidateChildren = [...node.children].slice(2);
+  if (candidateChildren.length < 2) return false;
+
+  const contentLikeChildren = candidateChildren.filter((child) => isLikelyThreadsContentChild(child));
+  return contentLikeChildren.length >= Math.min(2, candidateChildren.length);
+}
+
+function findDeepNodeWithManyChildren(node: Element): Element | null {
+  // Đi theo spine chính của feed wrapper, nhưng chỉ dừng khi node đó
+  // thực sự giống list chứa các post card sau index 2.
+  let current: Element = node;
+  while (true) {
+    if (isLikelyThreadsListNode(current)) {
+      return current;
+    }
+
+    if (current.children.length === 0) return null;
+
+    const next = current.children[0];
+    if (!(next instanceof Element)) return null;
+    if (next === current) return null;
+
+    if (current.children.length > 3 && !isLikelyThreadsListNode(current)) {
+      current = next;
+      continue;
+    }
+
+    current = next;
+  }
+}
+
+function extractTextFromThreadsChild(child: Element): string {
+  const spanTexts = [...child.querySelectorAll("span")]
+    .map((span) => normalizeWhitespace((span as HTMLElement).innerText || span.textContent || ""))
+    .filter(Boolean);
+
+  if (spanTexts.length) {
+    const mergedSpan = normalizeWhitespace(spanTexts.join(" "));
+    if (mergedSpan.length >= 16) return mergedSpan;
+  }
+
+  return normalizeWhitespace((child as HTMLElement).innerText || child.textContent || "");
+}
+
+function isLikelyContentSpanText(text: string): boolean {
+  const normalized = normalizeWhitespace(text);
+  if (!normalized) return false;
+
+  // Ignore pure counters or separators like "1", "1/2", "3 3".
+  if (/^[\d\s.,/kKmM]+$/.test(normalized)) return false;
+
+  const folded = toFoldedText(normalized);
+  if (NON_CONTENT_ACTION_MATCHERS.some((item) => folded.includes(toFoldedText(item)))) return false;
+  if (["translate", "xem ban dich", "xem bản dịch"].some((item) => folded.includes(toFoldedText(item)))) return false;
+
+  return true;
+}
+
+function findChildOrGrandchildWithMoreThanTwoChildren(parent: Element): Element | null {
+  for (const child of parent.children) {
+    if (child.children.length > 2) return child;
+  }
+
+  for (const child of parent.children) {
+    for (const grandchild of child.children) {
+      if (grandchild.children.length > 2) return grandchild;
+    }
+  }
+
+  return null;
+}
+
+function extractSpanContentFromNodeChildrenFromIndex(node: Element, startIndex = 2): string {
+  const selectedChildren = [...node.children].slice(startIndex);
+  if (!selectedChildren.length) return "";
+
+  const parts: string[] = [];
+  for (const child of selectedChildren) {
+    const spans = child.querySelectorAll("span");
+    if (!spans.length) {
+      const fallback = normalizeWhitespace((child as HTMLElement).innerText || child.textContent || "");
+      if (fallback && isLikelyContentSpanText(fallback)) {
+        parts.push(fallback);
+      }
+      continue;
+    }
+
+    for (const span of spans) {
+      const value = normalizeWhitespace((span as HTMLElement).innerText || span.textContent || "");
+      if (isLikelyContentSpanText(value)) {
+        parts.push(value);
+      }
+    }
+  }
+
+  return normalizeWhitespace(parts.join(" "));
+}
+
+function findScopedThreadsChildForNode(contentBase: Element, node: Element, startIndex = 2): Element | null {
+  const selectedChildren = [...contentBase.children].slice(startIndex);
+  if (!selectedChildren.length) return null;
+
+  const closestContainer = node.closest(CONTENT_CONTAINER_SELECTOR);
+  for (const child of selectedChildren) {
+    if (child === node || child.contains(node) || node.contains(child)) {
+      return child;
+    }
+    if (closestContainer && (child === closestContainer || child.contains(closestContainer))) {
+      return child;
+    }
+  }
+
+  return null;
+}
+
+function extractBodyTextFromThreadsFeedRoot(node: Element): string {
+  const root = findThreadsFeedRoot(node);
+  if (!root) return "";
+
+  const spineNode = findDeepNodeWithManyChildren(root) ?? root;
+  const contentBase = findChildOrGrandchildWithMoreThanTwoChildren(spineNode);
+  if (!contentBase) return "";
+
+  const scopedChild = findScopedThreadsChildForNode(contentBase, node, 2);
+  if (scopedChild) {
+    return extractSpanContentFromNodeChildrenFromIndex(scopedChild, 0);
+  }
+
+  return extractSpanContentFromNodeChildrenFromIndex(contentBase, 2);
+}
+
+function sanitizeExtractedText(text: string): string {
+  const actionWords = NON_CONTENT_ACTION_MATCHERS.map((item) => toFoldedText(item));
+  const translationWords = ["dich", "translate", "see translation", "xem ban dich", "xem bản dịch"];
+  const lines = String(text || "")
+    .split(/\n+/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean)
+    .filter((line) => {
+      if (line.length <= 26) {
+        const folded = toFoldedText(line);
+        if (actionWords.some((word) => folded.includes(word))) {
+          return false;
+        }
+      }
+
+      if (/^[\d\s.,/kKmM]+$/.test(line)) {
+        return false;
+      }
+
+      const folded = toFoldedText(line);
+      if (translationWords.some((word) => folded.includes(word))) {
+        return false;
+      }
+
+      return true;
+    });
+
+  const merged = normalizeWhitespace(lines.join(" "));
+
+  // Trim trailing social counters often rendered after body text on Threads.
+  const withoutSlashCounters = merged.replace(/\s+\d+\s*\/\s*\d+(?:\s+\d+){0,4}$/g, "");
+  const withoutNumberTail = withoutSlashCounters.replace(/(?:\s+\d+){2,6}$/g, "");
+  return normalizeWhitespace(withoutNumberTail);
 }
 
 function findThreadContainer(element: Element): Element | null {
-  return element.closest("article, [role='article'], section, li");
+  return element.closest(CONTENT_CONTAINER_SELECTOR);
+}
+
+function getNodeDepthWithin(base: Element, node: Element): number {
+  let depth = 0;
+  let current: Element | null = node;
+
+  while (current && current !== base) {
+    depth += 1;
+    current = current.parentElement;
+  }
+
+  return current === base ? depth : -1;
+}
+
+function chooseFocusedThreadContentNode(node: Element): Element {
+  const base = findThreadContainer(node) ?? node;
+  const descendants = [...base.querySelectorAll("div")];
+  if (!descendants.length) {
+    return base;
+  }
+
+  let bestNode: Element = base;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (const candidate of descendants.slice(0, 180)) {
+    if (!(candidate instanceof HTMLElement)) continue;
+    if (!isVisible(candidate)) continue;
+
+    const depth = getNodeDepthWithin(base, candidate);
+    if (depth < 0) continue;
+
+    const rawText = normalizeWhitespace(candidate.innerText || candidate.textContent || "");
+    if (rawText.length < MIN_TEXT_LENGTH) continue;
+
+    const folded = toFoldedText(rawText);
+    const spanCount = candidate.querySelectorAll("span").length;
+    const hasMedia = candidate.querySelector("img, video, canvas") ? 1 : 0;
+    const actionPenalty = looksLikeNonContentAction(rawText.slice(0, 64)) ? 180 : 0;
+    const textScore = Math.min(rawText.length, 1200);
+    const depthBonus = depth * 14;
+    const spanBonus = Math.min(spanCount, 40) * 10;
+    const mediaPenalty = hasMedia ? 120 : 0;
+    const metaPenalty = /\b\d+\s*(gio|giờ|h|m|phut|phút)\b/.test(folded) ? 120 : 0;
+    const basePenalty = candidate === base ? 260 : 0;
+    const score = textScore + depthBonus + spanBonus - mediaPenalty - actionPenalty - metaPenalty - basePenalty;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestNode = candidate;
+    }
+  }
+
+  return bestNode;
+}
+
+function findBestContentRoot(node: Element): Element {
+  const directContainer = node.closest(CONTENT_CONTAINER_SELECTOR);
+  if (directContainer && isVisible(directContainer)) {
+    return directContainer;
+  }
+
+  let best = node;
+  let bestLength = extractTextForNode(node).length;
+
+  let current: Element | null = node.parentElement;
+  let depth = 0;
+  while (current && depth < 8) {
+    if (isVisible(current)) {
+      const text = extractTextForNode(current);
+      const length = text.length;
+      if (length >= MIN_TEXT_LENGTH && length <= 3000 && length > bestLength) {
+        best = current;
+        bestLength = length;
+      }
+    }
+    current = current.parentElement;
+    depth += 1;
+  }
+
+  return best;
 }
 
 function findExpandableControls(): Element[] {
@@ -407,7 +726,7 @@ function mergeSegmentsByThreadContainer(
 ): Array<{ text: string; xpath: string }> {
   // Group consecutive segments that share the same nearest thread container.
   // This prevents one social-feed post from appearing as multiple articles.
-  const CONTAINER_SELECTOR = "article, [role='article'], section";
+  const CONTAINER_SELECTOR = CONTENT_CONTAINER_SELECTOR;
   const result: Array<{ text: string; xpath: string }> = [];
   let i = 0;
 
@@ -478,32 +797,66 @@ function extractRawSegments(options: { exhaustive?: boolean } = {}): RawSegment[
 
   const threadNodes = exhaustive ? [...document.querySelectorAll(THREAD_SELECTOR)] : [];
   const blockNodes = [...document.querySelectorAll(BLOCK_SELECTOR)];
-  const nodes = exhaustive ? [...threadNodes, ...blockNodes] : blockNodes;
+  const hasThreadNodes = exhaustive && threadNodes.length > 0;
+  const nodes = hasThreadNodes ? threadNodes : blockNodes;
 
   for (const node of nodes) {
-    if (seenNodes.has(node)) continue;
-    seenNodes.add(node);
-    if (visited.has(node) || !isVisible(node)) continue;
-    const parent = node.parentElement;
+    const sourceNode = hasThreadNodes ? chooseFocusedThreadContentNode(node) : findBestContentRoot(node);
+    if (seenNodes.has(sourceNode)) continue;
+    seenNodes.add(sourceNode);
+    if (visited.has(sourceNode) || !isVisible(sourceNode)) continue;
+    const parent = sourceNode.parentElement;
     if (parent && visited.has(parent)) continue;
 
     const text = exhaustive
-      ? extractTextForNode(node)
-      : normalizeWhitespace((node as HTMLElement).innerText ?? "");
+      ? extractTextForNode(sourceNode)
+      : extractTextForNode(sourceNode);
     if (text.length < MIN_TEXT_LENGTH) continue;
 
-    visited.add(node);
-    const xpath = getXPath(node);
+    visited.add(sourceNode);
+    const xpath = getXPath(sourceNode);
     // Cache full text BEFORE chunking so hydration can return the complete article.
     segmentFullTextCache.set(xpath, text);
     const chunks = splitLongText(text, MAX_TEXT_LENGTH);
     for (const chunk of chunks) {
-      if (chunk.length >= MIN_TEXT_LENGTH) segments.push({ text: chunk, xpath, node });
+      if (chunk.length >= MIN_TEXT_LENGTH) segments.push({ text: chunk, xpath, node: sourceNode });
     }
   }
 
   // Merge segments that belong to the same thread container before chunking dedup.
-  const containerMerged = mergeSegmentsByThreadContainer(segments);
+  let containerMerged = mergeSegmentsByThreadContainer(segments);
+
+  // Fail-safe for platforms with unstable container semantics: if exhaustive scan
+  // yields nothing, retry with a broader legacy-style block set.
+  if (!containerMerged.length && exhaustive) {
+    const retrySegments: Array<{ text: string; xpath: string; node: Element }> = [];
+    const retryVisited = new Set<Element>();
+    const retrySeen = new Set<Element>();
+    const fallbackNodes = [...document.querySelectorAll(FALLBACK_BLOCK_SELECTOR)];
+
+    for (const node of fallbackNodes) {
+      const sourceNode = findBestContentRoot(node);
+      if (retrySeen.has(sourceNode)) continue;
+      retrySeen.add(sourceNode);
+      if (retryVisited.has(sourceNode) || !isVisible(sourceNode)) continue;
+      const parent = sourceNode.parentElement;
+      if (parent && retryVisited.has(parent)) continue;
+
+      const text = extractTextForNode(sourceNode);
+      if (text.length < MIN_TEXT_LENGTH) continue;
+
+      retryVisited.add(sourceNode);
+      const xpath = getXPath(sourceNode);
+      segmentFullTextCache.set(xpath, text);
+      const chunks = splitLongText(text, MAX_TEXT_LENGTH);
+      for (const chunk of chunks) {
+        if (chunk.length >= MIN_TEXT_LENGTH) retrySegments.push({ text: chunk, xpath, node: sourceNode });
+      }
+    }
+
+    containerMerged = mergeSegmentsByThreadContainer(retrySegments);
+  }
+
   return mergeBrokenSegments(containerMerged).map((segment, index) => ({ ...segment, id: index }));
 }
 
@@ -606,7 +959,7 @@ function findBestHydrationNode(node: Element): Element {
     depth += 1;
   }
 
-  const threadContainer = node.closest("article, [role='article'], section, li");
+  const threadContainer = node.closest("article, [role='article']");
   if (threadContainer && !candidates.includes(threadContainer)) {
     candidates.push(threadContainer);
   }
@@ -680,10 +1033,6 @@ async function getFullTextByXPath(xpath: string, textHint = ""): Promise<string>
     return segmentFullTextCache.get(xpath) ?? "";
   }
 
-  // Always expand "see more" controls within this specific node BEFORE reading text.
-  // This handles posts where the truncated text was cached at scan time and the user
-  // explicitly requests the full content via Hydrate.
-  await expandControlsWithin(node);
   const freshText = extractTextForNode(node);
 
   // Return the longer of: live DOM text vs scan-time cache (picks up any extra
@@ -846,7 +1195,7 @@ chrome.runtime.onMessage.addListener(
       const deepScanLevel = normalizeDeepScanLevel(message.deepScanLevel);
 
       (async () => {
-        if (exhaustive) await prepareExhaustiveDomScan(deepScanLevel);
+        // Auto-scroll và auto-click đã bị tắt — dùng nút Refresh trong popup để chủ động scan
         const raw = extractRawSegments({ exhaustive });
         sendResponse({ ok: true, total: raw.length, segments: raw, exhaustive, deepScanLevel });
       })().catch((error: unknown) => {

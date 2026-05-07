@@ -5,6 +5,7 @@ interface ArticlesTabProps {
   scanTotal: number;
   scanAccepted: number;
   currentReadingSegmentId: number | null;
+  onRefresh: () => void;
   onUpdateSegment: (id: number, updater: (segment: ScoredSegment) => ScoredSegment) => void;
   onPlaySingle: (segment: ScoredSegment) => void;
   onFocus: (segment: ScoredSegment) => Promise<void>;
@@ -16,6 +17,7 @@ export function ArticlesTab({
   scanTotal,
   scanAccepted,
   currentReadingSegmentId,
+  onRefresh,
   onUpdateSegment,
   onPlaySingle,
   onFocus,
@@ -23,7 +25,10 @@ export function ArticlesTab({
 }: ArticlesTabProps) {
   return (
     <section className="segments-list">
-      <p className="list-stats">{scanTotal} total · {scanAccepted} accepted</p>
+      <div className="list-stats-row">
+        <p className="list-stats">{scanTotal} total · {scanAccepted} accepted</p>
+        <button type="button" className="refresh-btn" onClick={onRefresh} title="Re-scan page">↻ Refresh</button>
+      </div>
       {segments.length === 0 ? (
         <p className="empty-hint">No segments yet — run Scan first.</p>
       ) : null}

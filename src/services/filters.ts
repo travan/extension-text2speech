@@ -103,6 +103,16 @@ export function lexicalTopicScore(text: string, topics: string[]): number {
       continue;
     }
 
+    // Guard against false positives on short multi-word topics (e.g. "tu vi")
+    // when only one short token appears in unrelated text.
+    const allShortTokens = topicTokens.every((token) => token.length <= 2);
+    if (allShortTokens) {
+      if (topicTokens.length === 1 && textTokens.has(topicTokens[0])) {
+        best = Math.max(best, 1);
+      }
+      continue;
+    }
+
     let matched = 0;
     for (const token of topicTokens) {
       if (hasApproxTokenMatch(textTokens, token)) {

@@ -264,7 +264,6 @@ export function PopupApp() {
   function openDetail(segment: ScoredSegment): void {
     setDetailSegmentId(segment.id);
     setView("detail");
-    scanOps.hydrateFullText(segment).catch(() => undefined);
   }
 
   return (
@@ -324,6 +323,7 @@ export function PopupApp() {
             scanTotal={scan.total}
             scanAccepted={scan.accepted}
             currentReadingSegmentId={speech.currentReadingSegmentId}
+            onRefresh={handleScanClick}
             onUpdateSegment={scanOps.updateSegment}
             onPlaySingle={speech.playSingle}
             onFocus={scanOps.focusInTab}
