@@ -1,8 +1,43 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildRawSignature, processScanResult } from "../../../src/services/scan";
 
+afterEach(() => vi.unstubAllGlobals());
+
 describe("scan", () => {
+  it("detects changes after the first 25 segments and 80 characters", () => {
+    const initial = Array.from({ length: 30 }, (_, id) => ({ id, text: "x".repeat(100), xpath: `/${id}` }));
+    const changed = initial.map((item) => ({ ...item }));
+    changed[29].text += "new content";
+    expect(buildRawSignature(changed)).not.toBe(buildRawSignature(initial));
+  });
+
+  it("scores a match to any requested topic without averaging unrelated topics", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [
+        { index: 1, embedding: [0, 1] }, { index: 0, embedding: [1, 0] },
+      ] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ index: 0, embedding: [1, 0] }] }))));
+    const result = await processScanResult({
+      rawSegments: [{ id: 1, text: "Meaningful related content", xpath: "/a" }],
+      topics: ["astronomy", "cooking"], topicCandidates: ["astronomy", "cooking"],
+      settings: { threshold: 0.6, filterMode: "ai", embeddingModel: "test" }, apiKey: "test",
+    });
+    expect(result.segments).toHaveLength(1);
+    expect(result.segments[0].semanticScore).toBe(1);
+    expect(result.fallbackNote).toBe("");
+  });
+
+  it("falls back explicitly on an incomplete embeddings response", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [] }))));
+    const result = await processScanResult({
+      rawSegments: [{ id: 1, text: "AI technology", xpath: "/a" }],
+      topics: ["AI"], topicCandidates: ["AI"],
+      settings: { threshold: 0.45, filterMode: "ai", embeddingModel: "test" }, apiKey: "test",
+    });
+    expect(result.fallbackNote).toContain("Invalid embeddings response");
+    expect(result.segments[0].semanticScore).toBeNull();
+  });
   it("builds stable raw signature shape", () => {
     const signature = buildRawSignature([
       { id: 1, text: "hello world", xpath: "/a" },

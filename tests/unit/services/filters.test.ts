@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { expandTopicCandidates, lexicalTopicScore, parseTopics } from "../../../src/services/filters";
+import { expandTopicCandidates, lexicalTopicScore, parseTopics, textToTokens, getMatchedKeywords } from "../../../src/services/filters";
 
 describe("filters", () => {
+  it("does not match short topic substrings inside unrelated words", () => {
+    expect(lexicalTopicScore("Bài viết về ngày mai và trái cây", ["ai"])).toBe(0);
+    expect(getMatchedKeywords("Email marketing campaign", ["ai"])).toEqual([]);
+    expect(lexicalTopicScore("AI: mô hình mới", ["ai"])).toBe(1);
+  });
+
+  it("normalizes Vietnamese đ and removes normalized stop words", () => {
+    expect(lexicalTopicScore("Thiền định giúp thư giãn", ["thien dinh"])).toBe(1);
+    expect(textToTokens("và của những đang")).toEqual([]);
+  });
   it("parses topics by comma/semicolon/newline", () => {
     const topics = parseTopics("ai, startup;thiền\nhealing");
     expect(topics).toEqual(["ai", "startup", "thiền", "healing"]);

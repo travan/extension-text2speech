@@ -1,3 +1,5 @@
+import { expandTopicCandidates, lexicalTopicScore, getMatchedKeywords, normalizeWhitespace, normalizeForMatch, textToTokens, hasApproxTokenMatch, parseTopics as parseTopicInput } from "../../services/filters";
+
 const MIN_TEXT_LENGTH = 30;
 const MAX_TEXT_LENGTH = 1600;
 const MAX_CAPTURE_ITEMS = 5000;
@@ -35,18 +37,6 @@ const FALLBACK_BLOCK_SELECTOR = [
   "span",
 ].join(",");
 
-const STOP_WORDS = new Set([
-  "và", "là", "của", "cho", "với", "một", "những", "các", "được", "trong", "khi", "này", "đó", "đang", "đến",
-  "the", "is", "are", "to", "of", "for", "on", "in",
-]);
-
-const TOPIC_VARIANTS: Record<string, string[]> = {
-  "tam linh": ["ma", "quy", "coi am", "tu vi", "phong thuy", "xem boi", "tam linh"],
-  "thien dinh": ["chanh niem", "mindfulness", "hoi tho", "tap trung", "an dinh"],
-  "chua lanh": ["healing", "tri lieu", "tu yeu thuong", "lanh thuong"],
-  "nang luong": ["tan so", "chakra", "nang luong tich cuc", "truong nang luong"],
-};
-
 const EXPANDABLE_TEXT_MATCHERS = [
   "xem them", "xem thêm", "mo rong", "mở rộng", "hien thi them", "hiển thị thêm",
   "doc them", "đọc thêm", "read more", "see more", "show more",
@@ -66,6 +56,8 @@ interface RawSegment {
 }
 
 interface CaptureRecord {
+  key: string;
+  capturedAt: number;
   id: number;
   text: string;
   xpath: string;
@@ -91,21 +83,6 @@ interface CaptureState {
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
-function normalizeWhitespace(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
-}
-
-function normalizeTopicKey(topic: string): string {
-  return normalizeWhitespace(topic)
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function normalizeForMatch(text: string): string {
-  return normalizeTopicKey(text);
-}
-
 function toFoldedText(value: unknown): string {
   return String(value || "")
     .normalize("NFD")
@@ -119,107 +96,8 @@ function wait(ms: number): Promise<void> {
 
 // ─── Topic helpers ────────────────────────────────────────────────────────────
 
-function expandTopicCandidates(topics: string[]): string[] {
-  const expanded: string[] = [];
-
-  for (const topic of topics) {
-    expanded.push(topic);
-    const normalized = normalizeTopicKey(topic);
-
-    for (const [seed, variants] of Object.entries(TOPIC_VARIANTS)) {
-      if (!normalized) continue;
-      if (!normalized.includes(seed) && !seed.includes(normalized)) continue;
-      expanded.push(...variants);
-    }
-  }
-
-  return [...new Set(expanded.map((item) => normalizeWhitespace(item)).filter(Boolean))];
-}
-
 function parseTopics(input: string | string[]): string[] {
-  if (Array.isArray(input)) {
-    return [...new Set(input.map((x) => String(x || "").trim()).filter(Boolean))];
-  }
-  return [...new Set(
-    String(input || "")
-      .split(/[,;\n]/)
-      .map((x) => x.trim())
-      .filter(Boolean),
-  )];
-}
-
-function textToTokens(text: string): string[] {
-  return normalizeForMatch(text)
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .split(/\s+/)
-    .filter(Boolean)
-    .filter((token) => token.length > 1 && !STOP_WORDS.has(token));
-}
-
-function hasApproxTokenMatch(textTokens: Set<string>, token: string): boolean {
-  if (textTokens.has(token)) return true;
-  if (token.length < 4) return false;
-  for (const textToken of textTokens) {
-    if (textToken.startsWith(token) || token.startsWith(textToken)) return true;
-    if (textToken.includes(token) || token.includes(textToken)) return true;
-  }
-  return false;
-}
-
-function lexicalTopicScore(text: string, topics: string[]): number {
-  const textTokens = new Set(textToTokens(text));
-  const normalizedText = normalizeForMatch(text);
-  if (!textTokens.size || !topics.length) return 0;
-
-  let best = 0;
-  for (const topic of topics) {
-    const normalizedTopic = normalizeForMatch(topic);
-    const topicTokens = textToTokens(topic);
-    if (!topicTokens.length) continue;
-
-    if (normalizedText.includes(normalizedTopic)) {
-      best = Math.max(best, 1);
-      continue;
-    }
-
-    const allShortTokens = topicTokens.every((token) => token.length <= 2);
-    if (allShortTokens) {
-      if (topicTokens.length === 1 && textTokens.has(topicTokens[0])) {
-        best = Math.max(best, 1);
-      }
-      continue;
-    }
-
-    let matched = 0;
-    for (const token of topicTokens) {
-      if (hasApproxTokenMatch(textTokens, token)) matched += 1;
-    }
-    if (!matched) continue;
-
-    const ratio = matched / topicTokens.length;
-    const boosted = 0.5 + 0.5 * ratio;
-    best = Math.max(best, Math.min(1, boosted));
-  }
-
-  return Number(best.toFixed(4));
-}
-
-function getMatchedKeywords(text: string, topics: string[]): string[] {
-  const textTokens = new Set(textToTokens(text));
-  const normalizedText = normalizeForMatch(text);
-  const hits: string[] = [];
-
-  for (const topic of topics) {
-    const normalizedTopic = normalizeForMatch(topic);
-    if (normalizedText.includes(normalizedTopic)) hits.push(topic);
-
-    const topicTokens = textToTokens(topic);
-    for (const token of topicTokens) {
-      if (hasApproxTokenMatch(textTokens, token)) hits.push(token);
-    }
-  }
-
-  return [...new Set(hits)].slice(0, 10);
+  return parseTopicInput(Array.isArray(input) ? input.join(",") : input);
 }
 
 // ─── DOM helpers ─────────────────────────────────────────────────────────────
@@ -1068,7 +946,8 @@ function recordKey(segment: { text: string; xpath: string }): string {
 function hydrateRecords(items: CaptureRecord[]): void {
   captureState.records = new Map();
   for (const item of items ?? []) {
-    captureState.records.set(recordKey(item), item);
+    const key = recordKey(item);
+    captureState.records.set(key, { ...item, key, capturedAt: item.capturedAt ?? item.firstSeenAt });
   }
 }
 
@@ -1093,6 +972,8 @@ async function persistCaptureNow(): Promise<void> {
       existing.matchedKeywords = [...new Set([...(existing.matchedKeywords ?? []), ...matchedKeywords])].slice(0, 12);
     } else {
       captureState.records.set(key, {
+        key,
+        capturedAt: now,
         id: segment.id,
         text: segment.text,
         xpath: segment.xpath,
@@ -1107,6 +988,8 @@ async function persistCaptureNow(): Promise<void> {
   const items = [...captureState.records.values()]
     .sort((a, b) => (b.score - a.score) || (b.lastSeenAt - a.lastSeenAt))
     .slice(0, MAX_CAPTURE_ITEMS);
+
+  hydrateRecords(items);
 
   await chrome.storage.local.set({
     [captureState.storageKey]: {

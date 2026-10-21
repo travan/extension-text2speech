@@ -13,7 +13,6 @@ export default defineManifest({
   },
   action: {
     default_title: "Topic Reader",
-    default_popup: "src/entrypoints/popup/index.html",
   },
   content_scripts: [
     {

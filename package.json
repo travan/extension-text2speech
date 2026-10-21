@@ -8,9 +8,15 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run tests/unit",
+    "test:local-ai": "vitest run tests/integration/local-ai.test.ts",
+    "test:extension": "npm run build && playwright test --config playwright.extension.config.ts",
+    "test:speech:native": "npm run build && NATIVE_SPEECH_HEADED=1 playwright test --config playwright.extension.config.ts tests/extension/native-speech.spec.ts",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test tests/e2e/popup-smoke.spec.ts",
-    "test:e2e:flow": "playwright test tests/e2e/popup-flow.spec.ts tests/e2e/results-flow.spec.ts"
+    "test:e2e:flow": "playwright test tests/e2e/popup-flow.spec.ts tests/e2e/results-flow.spec.ts",
+    "test:benchmark": "vitest run tests/integration/relevance-benchmark.test.ts",
+    "verify": "node scripts/verify.mjs",
+    "test:transport": "vitest run tests/transport"
   },
   "keywords": [],
   "author": "",

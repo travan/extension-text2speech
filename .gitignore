@@ -15,3 +15,6 @@ coverage/
 !.env.example
 .DS_Store
 .vscode/
+
+# Reproducible verification runs (logs, traces, reports)
+artifacts/verification/

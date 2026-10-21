@@ -1,4 +1,5 @@
-import { lexicalTopicScore, normalizeLexicalScore, getMatchedKeywords, normalizeWhitespace } from "./filters";
+import { lexicalTopicScore, normalizeLexicalScore, getMatchedKeywords, normalizeWhitespace, containsTopicPhrase } from "./filters";
+import { applyLocalAiScores, DEFAULT_LOCAL_AI_MODEL, DEFAULT_LOCAL_AI_URL, LOCAL_AI_MAX_SEGMENTS } from "./localAi";
 
 export interface RawSegment {
   id: number;
@@ -18,8 +19,10 @@ export interface ScoredSegment extends RawSegment {
 
 export interface ScanSettings {
   threshold: number;
-  filterMode: "basic" | "ai";
+  filterMode: "basic" | "ai" | "local";
   embeddingModel: string;
+  localAiUrl?: string;
+  localAiModel?: string;
 }
 
 const DEFAULT_MAX_SEGMENTS = 80;
@@ -27,8 +30,7 @@ const DEFAULT_BATCH_SIZE = 40;
 
 export function buildRawSignature(rawSegments: RawSegment[]): string {
   const sample = rawSegments
-    .slice(0, 25)
-    .map((segment) => `${segment.id}:${String(segment.text || "").slice(0, 80)}`)
+    .map((segment) => JSON.stringify([segment.id, segment.xpath, segment.text]))
     .join("|");
   return `${rawSegments.length}::${sample}`;
 }
@@ -40,23 +42,6 @@ function truncateForEmbedding(text: string): string {
     return normalized;
   }
   return `${normalized.slice(0, maxChars)}...`;
-}
-
-function averageVectors(vectors: number[][]): number[] {
-  if (!vectors.length) {
-    return [];
-  }
-
-  const size = vectors[0].length;
-  const sum = new Array(size).fill(0);
-
-  for (const vector of vectors) {
-    for (let i = 0; i < size; i += 1) {
-      sum[i] += vector[i];
-    }
-  }
-
-  return sum.map((value) => value / vectors.length);
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -95,6 +80,7 @@ async function fetchEmbeddings(apiKey: string, model: string, texts: string[], b
         model,
         input: chunk,
       }),
+      signal: AbortSignal.timeout(30000),
     });
 
     if (!response.ok) {
@@ -105,6 +91,13 @@ async function fetchEmbeddings(apiKey: string, model: string, texts: string[], b
     const data = (await response.json()) as { data?: Array<{ index: number; embedding: number[] }> };
     const arr = Array.isArray(data?.data) ? data.data : [];
     arr.sort((a, b) => a.index - b.index);
+    if (arr.length !== chunk.length || arr.some((item, index) =>
+      item.index !== index || !Array.isArray(item.embedding) || !item.embedding.length
+      || item.embedding.some((value) => !Number.isFinite(value))
+      || item.embedding.length !== arr[0].embedding.length
+      || (vectors.length > 0 && item.embedding.length !== vectors[0].length))) {
+      throw new Error("Invalid embeddings response");
+    }
     for (const item of arr) {
       vectors.push(item.embedding);
     }
@@ -130,7 +123,6 @@ export async function applySemanticScores(
     return inputSegments;
   }
 
-  const topicVector = averageVectors(topicEmbeddings);
   const candidateTexts = candidates.map((segment) => truncateForEmbedding(segment.text));
   const segmentEmbeddings = await fetchEmbeddings(apiKey, model, candidateTexts, DEFAULT_BATCH_SIZE);
 
@@ -140,7 +132,8 @@ export async function applySemanticScores(
     if (!embedding) {
       continue;
     }
-    const similarity = cosineSimilarity(topicVector, embedding);
+    if (embedding.length !== topicEmbeddings[0].length) throw new Error("Embedding dimensions differ");
+    const similarity = Math.max(...topicEmbeddings.map((topic) => cosineSimilarity(topic, embedding)));
     semanticById.set(candidates[i].id, similarity);
   }
 
@@ -185,7 +178,7 @@ export async function processScanResult(input: {
       score: topics.length ? lexical : 1,
       lexicalScore: lexical,
       semanticScore: null,
-      matchedTopics: topics.filter((topic) => segment.text.toLowerCase().includes(topic.toLowerCase())),
+      matchedTopics: topics.filter((topic) => containsTopicPhrase(segment.text, topic)),
       matchedKeywords: getMatchedKeywords(segment.text, topicCandidates),
       selected: previousByXpath.get(segment.xpath)?.selected ?? true,
       voice: previousByXpath.get(segment.xpath)?.voice ?? "",
@@ -194,6 +187,19 @@ export async function processScanResult(input: {
 
   let scoredSegments = initialSegments;
   let fallbackNote = "";
+
+  if (topics.length && settings.filterMode === "local" && initialSegments.length) {
+    try {
+      scoredSegments = await applyLocalAiScores(
+        initialSegments, topics, settings.localAiUrl ?? DEFAULT_LOCAL_AI_URL,
+        settings.localAiModel ?? DEFAULT_LOCAL_AI_MODEL,
+      );
+      fallbackNote = ` (Local AI: ${Math.min(initialSegments.length, LOCAL_AI_MAX_SEGMENTS)} đoạn được chấm điểm`;
+      fallbackNote += initialSegments.length > LOCAL_AI_MAX_SEGMENTS ? "; phần còn lại dùng lọc cơ bản)" : ")";
+    } catch (error) {
+      fallbackNote = ` (Local AI không khả dụng, dùng lọc cơ bản: ${error instanceof Error ? error.message : String(error)})`;
+    }
+  }
 
   if (topics.length && settings.filterMode === "ai") {
     if (apiKey) {
@@ -211,7 +217,7 @@ export async function processScanResult(input: {
     ? scoredSegments.filter((segment) => segment.score >= settings.threshold)
     : scoredSegments;
 
-  if (topics.length && !filtered.length && scoredSegments.length) {
+  if (topics.length && !filtered.length && scoredSegments.length && settings.filterMode !== "local") {
     const relaxedThreshold = Math.max(0.2, Number((settings.threshold * 0.72).toFixed(3)));
     const relaxed = scoredSegments.filter(
       (segment) => segment.score >= relaxedThreshold || (segment.matchedKeywords?.length || 0) >= 2,

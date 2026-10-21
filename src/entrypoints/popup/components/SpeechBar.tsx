@@ -55,7 +55,7 @@ export function SpeechBar({
           ))}
         </select>
       </div>
-      <p className="status-text">{status}</p>
+      <p className="status-text" aria-live="polite" title={status}>{status}</p>
     </footer>
   );
 }

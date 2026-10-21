@@ -53,6 +53,8 @@ export function PopupApp() {
     setThreshold,
     setFilterMode,
     setEmbeddingModel,
+    setLocalAiUrl,
+    setLocalAiModel,
     setAutoScanEnabled,
     setAutoScanIntervalSec,
     setDeepScanEnabled,
@@ -70,6 +72,7 @@ export function PopupApp() {
   const [openAiApiKey, setOpenAiApiKey] = useState("");
   const [topicOptions, setTopicOptions] = useState<string[]>([]);
   const [view, setView] = useState<View>("settings");
+  const [hydrated, setHydrated] = useState(false);
 
   const domainHost = useMemo(() => normalizePresetHost(activeHost), [activeHost]);
   const topicCount = useMemo(() => parseTopics(settings.topics).length, [settings.topics]);
@@ -144,6 +147,8 @@ export function PopupApp() {
         setStatus("Ready to scan.");
       } catch {
         setStatus("Cannot read active tab. Open a normal webpage and try again.");
+      } finally {
+        setHydrated(true);
       }
     }
 
@@ -151,6 +156,7 @@ export function PopupApp() {
   }, [replaceSettings, setActiveTab, setStatus]);
 
   useEffect(() => {
+    if (!hydrated) return;
     const timer = globalThis.setTimeout(() => {
       setLocal({
         [GLOBAL_SETTINGS_KEY]: settings,
@@ -160,10 +166,10 @@ export function PopupApp() {
     }, 300);
 
     return () => globalThis.clearTimeout(timer);
-  }, [settings, openAiApiKey, topicOptions]);
+  }, [hydrated, settings, openAiApiKey, topicOptions]);
 
   useEffect(() => {
-    if (!activeTabId) {
+    if (!hydrated || !activeTabId) {
       return;
     }
 
@@ -181,7 +187,7 @@ export function PopupApp() {
     }, 180);
 
     return () => globalThis.clearTimeout(timer);
-  }, [activeTabId, activeHost, scan, segments, detailSegmentId]);
+  }, [hydrated, activeTabId, activeHost, scan, segments, detailSegmentId]);
 
   function rememberCurrentTopicsAsOption(): void {
     const normalized = parseTopics(settings.topics).join(", ");
@@ -197,10 +203,7 @@ export function PopupApp() {
   }
 
   function toggleTopicChip(topic: string): void {
-    const current = settings.topics
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
+    const current = parseTopics(settings.topics);
     const already = current.includes(topic);
     const next = already
       ? current.filter((t) => t !== topic)
@@ -264,6 +267,7 @@ export function PopupApp() {
   function openDetail(segment: ScoredSegment): void {
     setDetailSegmentId(segment.id);
     setView("detail");
+    void scanOps.hydrateFullText(segment);
   }
 
   return (
@@ -299,6 +303,8 @@ export function PopupApp() {
             onThresholdChange={setThreshold}
             onFilterModeChange={setFilterMode}
             onEmbeddingModelChange={setEmbeddingModel}
+            onLocalAiUrlChange={setLocalAiUrl}
+            onLocalAiModelChange={setLocalAiModel}
             onOpenAiApiKeyChange={setOpenAiApiKey}
             onAutoScanEnabledChange={setAutoScanEnabled}
             onAutoScanIntervalChange={setAutoScanIntervalSec}

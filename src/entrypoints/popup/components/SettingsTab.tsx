@@ -1,4 +1,7 @@
 import type { FilterMode, PopupSettings } from "../../../types";
+import { useState } from "react";
+import { checkLocalModel, listLocalModels } from "../../../services/localAi";
+import { parseTopics } from "../../../services/filters";
 
 interface SettingsTabProps {
   settings: PopupSettings;
@@ -10,6 +13,8 @@ interface SettingsTabProps {
   onThresholdChange: (value: number) => void;
   onFilterModeChange: (mode: FilterMode) => void;
   onEmbeddingModelChange: (model: string) => void;
+  onLocalAiUrlChange: (url: string) => void;
+  onLocalAiModelChange: (model: string) => void;
   onOpenAiApiKeyChange: (key: string) => void;
   onAutoScanEnabledChange: (enabled: boolean) => void;
   onAutoScanIntervalChange: (seconds: number) => void;
@@ -43,6 +48,8 @@ export function SettingsTab({
   onThresholdChange,
   onFilterModeChange,
   onEmbeddingModelChange,
+  onLocalAiUrlChange,
+  onLocalAiModelChange,
   onOpenAiApiKeyChange,
   onAutoScanEnabledChange,
   onAutoScanIntervalChange,
@@ -59,14 +66,32 @@ export function SettingsTab({
   onStopCapture,
   onOpenResults,
 }: SettingsTabProps) {
+  const [localStatus, setLocalStatus] = useState("");
+  const [checkingLocal, setCheckingLocal] = useState(false);
+  const [localModels, setLocalModels] = useState<string[]>([]);
+  async function checkLocal(): Promise<void> {
+    setCheckingLocal(true);
+    try {
+      const models = await listLocalModels(settings.localAiUrl);
+      setLocalModels(models);
+      if (models.includes(settings.localAiModel)) await checkLocalModel(settings.localAiUrl, settings.localAiModel);
+      setLocalStatus(models.includes(settings.localAiModel)
+        ? `Connected · ${settings.localAiModel} installed`
+        : `Connected · choose an installed chat model: ${models.join(", ") || "none"}`);
+    } catch (error) {
+      setLocalStatus(`Cannot connect: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setCheckingLocal(false);
+    }
+  }
   // Flatten all saved topic options into deduplicated individual topic chips.
   const allTopicChips = [...new Set(
-    topicOptions.flatMap((opt) => opt.split(",").map((t) => t.trim()).filter(Boolean)),
+    topicOptions.flatMap(parseTopics),
   )];
 
   // Which individual topics are currently active in the textarea.
   const activeTopics = new Set(
-    settings.topics.split(",").map((t) => t.trim()).filter(Boolean),
+    parseTopics(settings.topics),
   );
 
   return (
@@ -120,7 +145,26 @@ export function SettingsTab({
       >
         <option value="basic">Basic</option>
         <option value="ai">AI</option>
+        <option value="local">Local AI (Ollama)</option>
       </select>
+
+      {settings.filterMode === "local" ? (
+        <>
+          <label htmlFor="localAiUrl">Ollama URL</label>
+          <input id="localAiUrl" value={settings.localAiUrl}
+            onChange={(event) => { onLocalAiUrlChange(event.target.value); setLocalStatus(""); setLocalModels([]); }} />
+          <label htmlFor="localAiModel">Local chat model</label>
+          <input id="localAiModel" list="localModels" value={settings.localAiModel}
+            onChange={(event) => { onLocalAiModelChange(event.target.value); setLocalStatus(""); }} />
+          <datalist id="localModels">{localModels.map((model) => <option key={model} value={model} />)}</datalist>
+          <button type="button" disabled={checkingLocal} onClick={() => void checkLocal()}>
+            {checkingLocal ? "Connecting..." : "Check local AI"}
+          </button>
+          <small role="status">{localStatus}</small>
+          <small>Scan sends up to 40 excerpts to Ollama on this device. No API key required.
+            Remaining excerpts use Basic filtering. Local scans may take up to 2 minutes.</small>
+        </>
+      ) : null}
 
       {settings.filterMode === "ai" ? (
         <>
@@ -209,6 +253,7 @@ export function SettingsTab({
         <button type="button" onClick={onStopCapture}>Stop capture</button>
         <button type="button" onClick={onOpenResults}>Results ↗</button>
       </div>
+      <small>Feed capture uses Basic filtering. AI modes apply to Scan.</small>
     </section>
   );
 }
