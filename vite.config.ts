@@ -6,4 +6,12 @@ import manifest from "./src/manifest";
 
 export default defineConfig({
   plugins: [crx({ manifest }), react()],
+  build: {
+    rollupOptions: {
+      input: {
+        popup: "src/entrypoints/popup/index.html",
+        results: "src/entrypoints/results/index.html",
+      },
+    },
+  },
 });

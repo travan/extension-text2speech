@@ -1,7 +1,7 @@
 const STOP_WORDS = new Set([
   "và", "là", "của", "cho", "với", "một", "những", "các", "được", "trong", "khi", "này", "đó", "đang", "đến",
   "the", "is", "are", "to", "of", "for", "on", "in",
-]);
+].map((word) => normalizeTopicKey(word)));
 
 const TOPIC_VARIANTS: Record<string, string[]> = {
   "tam linh": ["ma", "quy", "coi am", "tu vi", "phong thuy", "xem boi", "tam linh"],
@@ -27,11 +27,18 @@ export function normalizeTopicKey(topic: string): string {
   return normalizeWhitespace(topic)
     .toLowerCase()
     .normalize("NFD")
-    .replaceAll(/[\u0300-\u036f]/g, "");
+    .replaceAll(/[\u0300-\u036f]/g, "")
+    .replaceAll("đ", "d");
 }
 
 export function normalizeForMatch(text: string): string {
   return normalizeTopicKey(text);
+}
+
+export function containsTopicPhrase(text: string, topic: string): boolean {
+  const words = (value: string) => normalizeForMatch(value).replaceAll(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const phrase = words(topic);
+  return Boolean(phrase) && ` ${words(text)} `.includes(` ${phrase} `);
 }
 
 export function expandTopicCandidates(topics: string[]): string[] {
@@ -72,10 +79,8 @@ export function hasApproxTokenMatch(textTokens: Set<string>, token: string): boo
   }
 
   for (const textToken of textTokens) {
+    if (textToken.length < 4) continue;
     if (textToken.startsWith(token) || token.startsWith(textToken)) {
-      return true;
-    }
-    if (textToken.includes(token) || token.includes(textToken)) {
       return true;
     }
   }
@@ -85,20 +90,18 @@ export function hasApproxTokenMatch(textTokens: Set<string>, token: string): boo
 
 export function lexicalTopicScore(text: string, topics: string[]): number {
   const textTokens = new Set(textToTokens(text));
-  const normalizedText = normalizeForMatch(text);
   if (!textTokens.size || !topics.length) {
     return 0;
   }
 
   let best = 0;
   for (const topic of topics) {
-    const normalizedTopic = normalizeForMatch(topic);
     const topicTokens = textToTokens(topic);
     if (!topicTokens.length) {
       continue;
     }
 
-    if (normalizedText.includes(normalizedTopic)) {
+    if (containsTopicPhrase(text, topic)) {
       best = Math.max(best, 1);
       continue;
     }
@@ -133,12 +136,10 @@ export function lexicalTopicScore(text: string, topics: string[]): number {
 
 export function getMatchedKeywords(text: string, topics: string[]): string[] {
   const textTokens = new Set(textToTokens(text));
-  const normalizedText = normalizeForMatch(text);
   const hits: string[] = [];
 
   for (const topic of topics) {
-    const normalizedTopic = normalizeForMatch(topic);
-    if (normalizedText.includes(normalizedTopic)) {
+    if (containsTopicPhrase(text, topic)) {
       hits.push(topic);
     }
 

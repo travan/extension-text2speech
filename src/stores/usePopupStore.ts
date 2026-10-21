@@ -2,12 +2,15 @@ import { create } from "zustand";
 
 import type { FilterMode, PopupSettings, ScanSummary } from "../types";
 import type { ScoredSegment } from "../services/scan";
+import { DEFAULT_LOCAL_AI_MODEL, DEFAULT_LOCAL_AI_URL } from "../services/localAi";
 
 const DEFAULT_SETTINGS: PopupSettings = {
   topics: "",
   threshold: 0.45,
   filterMode: "basic",
   embeddingModel: "text-embedding-3-small",
+  localAiUrl: DEFAULT_LOCAL_AI_URL,
+  localAiModel: DEFAULT_LOCAL_AI_MODEL,
   defaultVoice: "",
   autoScanEnabled: false,
   autoScanIntervalSec: 4,
@@ -28,6 +31,8 @@ interface PopupState {
   setThreshold: (threshold: number) => void;
   setFilterMode: (mode: FilterMode) => void;
   setEmbeddingModel: (model: string) => void;
+  setLocalAiUrl: (url: string) => void;
+  setLocalAiModel: (model: string) => void;
   setAutoScanEnabled: (enabled: boolean) => void;
   setAutoScanIntervalSec: (seconds: number) => void;
   setDeepScanEnabled: (enabled: boolean) => void;
@@ -37,7 +42,7 @@ interface PopupState {
   setBusy: (busy: boolean) => void;
   setActiveTab: (tabId: number | null, host: string) => void;
   setScanSummary: (summary: ScanSummary) => void;
-  setSegments: (segments: ScoredSegment[]) => void;
+  setSegments: (segments: ScoredSegment[] | ((previous: ScoredSegment[]) => ScoredSegment[])) => void;
   setDetailSegmentId: (segmentId: number | null) => void;
   replaceSettings: (settings: PopupSettings) => void;
 }
@@ -55,6 +60,8 @@ export const usePopupStore = create<PopupState>((set) => ({
   setThreshold: (threshold) => set((state) => ({ settings: { ...state.settings, threshold } })),
   setFilterMode: (filterMode) => set((state) => ({ settings: { ...state.settings, filterMode } })),
   setEmbeddingModel: (embeddingModel) => set((state) => ({ settings: { ...state.settings, embeddingModel } })),
+  setLocalAiUrl: (localAiUrl) => set((state) => ({ settings: { ...state.settings, localAiUrl } })),
+  setLocalAiModel: (localAiModel) => set((state) => ({ settings: { ...state.settings, localAiModel } })),
   setAutoScanEnabled: (autoScanEnabled) => set((state) => ({ settings: { ...state.settings, autoScanEnabled } })),
   setAutoScanIntervalSec: (autoScanIntervalSec) =>
     set((state) => ({ settings: { ...state.settings, autoScanIntervalSec } })),
@@ -65,7 +72,9 @@ export const usePopupStore = create<PopupState>((set) => ({
   setBusy: (busy) => set({ busy }),
   setActiveTab: (activeTabId, activeHost) => set({ activeTabId, activeHost }),
   setScanSummary: (scan) => set({ scan }),
-  setSegments: (segments) => set({ segments }),
+  setSegments: (segments) => set((state) => ({
+    segments: typeof segments === "function" ? segments(state.segments) : segments,
+  })),
   setDetailSegmentId: (detailSegmentId) => set({ detailSegmentId }),
   replaceSettings: (settings) => set({ settings }),
 }));

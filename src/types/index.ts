@@ -1,10 +1,12 @@
-export type FilterMode = "basic" | "ai";
+export type FilterMode = "basic" | "ai" | "local";
 
 export interface PopupSettings {
   topics: string;
   threshold: number;
   filterMode: FilterMode;
   embeddingModel: string;
+  localAiUrl: string;
+  localAiModel: string;
   defaultVoice: string;
   autoScanEnabled: boolean;
   autoScanIntervalSec: number;

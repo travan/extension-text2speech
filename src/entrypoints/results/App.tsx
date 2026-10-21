@@ -39,7 +39,8 @@ export function ResultsApp() {
     const data = await getLocal(storageKey);
     const payload = data?.[storageKey] as { items?: CaptureRecord[]; updatedAt?: number; domain?: string } | undefined;
     const rows = Array.isArray(payload?.items) ? payload.items : [];
-    rows.sort((a, b) => (b.capturedAt || 0) - (a.capturedAt || 0));
+    rows.sort((a, b) => (b.lastSeenAt || b.capturedAt || b.firstSeenAt || 0)
+      - (a.lastSeenAt || a.capturedAt || a.firstSeenAt || 0));
     setItems(rows);
     setPage((prev) => Math.min(prev, Math.max(1, Math.ceil(rows.length / pageSize))));
     setStatus(`Loaded ${rows.length} records.`);
@@ -50,9 +51,14 @@ export function ResultsApp() {
       return;
     }
 
-    await removeLocal(storageKey);
-    setItems([]);
-    setStatus("Capture storage cleared.");
+    try {
+      await sendTabMessage(tabIdInput!, { type: "STOP_CAPTURE" });
+      await removeLocal(storageKey);
+      setItems([]);
+      setStatus("Capture storage cleared.");
+    } catch {
+      setStatus("Cannot stop capture and clear storage. Check the source tab and retry.");
+    }
   }
 
   useEffect(() => {
@@ -111,7 +117,7 @@ export function ResultsApp() {
         type: "START_CAPTURE",
         tabId: tabIdInput,
         topics,
-        threshold: Number(settings.threshold) || 0.35,
+        threshold: Number.isFinite(settings.threshold) ? Number(settings.threshold) : 0.35,
       });
       setStatus("Capture started. Browse source tab to collect segments.");
     } catch {
@@ -238,7 +244,7 @@ export function ResultsApp() {
       <section className="items">
         {items.length === 0 && <p>No records available.</p>}
         {pagedItems.map((item) => (
-          <article key={item.key} className="card">
+          <article key={item.key || `${item.xpath}::${item.text}`} className="card">
             <div className="head">
               <strong>{item.score.toFixed(2)}</strong>
               <span>{new Date(item.lastSeenAt || item.firstSeenAt || item.capturedAt || Date.now()).toLocaleString()}</span>

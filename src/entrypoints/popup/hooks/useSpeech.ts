@@ -27,6 +27,7 @@ export function useSpeech({ segments, defaultVoice, onStatus }: UseSpeechOptions
   const [paused, setPaused] = useState(false);
   const [currentReadingSegmentId, setCurrentReadingSegmentId] = useState<number | null>(null);
   const queueRef = useRef<Array<{ utterance: SpeechSynthesisUtterance; segmentId: number }>>([]);
+  const generationRef = useRef(0);
 
   const voiceOptions = useMemo(() => buildVoiceOptions(voices), [voices]);
 
@@ -39,10 +40,14 @@ export function useSpeech({ segments, defaultVoice, onStatus }: UseSpeechOptions
     globalThis.speechSynthesis.onvoiceschanged = loadVoices;
     return () => {
       globalThis.speechSynthesis.onvoiceschanged = null;
+      generationRef.current += 1;
+      queueRef.current = [];
+      globalThis.speechSynthesis.cancel();
     };
   }, []);
 
-  function playQueue(): void {
+  function playQueue(generation = generationRef.current): void {
+    if (generation !== generationRef.current) return;
     const next = queueRef.current.shift();
     if (!next) {
       setSpeaking(false);
@@ -55,8 +60,16 @@ export function useSpeech({ segments, defaultVoice, onStatus }: UseSpeechOptions
     setSpeaking(true);
     setPaused(false);
     setCurrentReadingSegmentId(next.segmentId);
-    next.utterance.onend = () => playQueue();
-    next.utterance.onerror = () => playQueue();
+    next.utterance.onend = () => playQueue(generation);
+    next.utterance.onerror = () => {
+      if (generation !== generationRef.current) return;
+      generationRef.current += 1;
+      queueRef.current = [];
+      setSpeaking(false);
+      setPaused(false);
+      setCurrentReadingSegmentId(null);
+      onStatus("Speech failed. Try another voice.");
+    };
     globalThis.speechSynthesis.speak(next.utterance);
   }
 
@@ -66,7 +79,7 @@ export function useSpeech({ segments, defaultVoice, onStatus }: UseSpeechOptions
     if (voice) {
       utterance.voice = voice;
     }
-    utterance.lang = "vi-VN";
+    utterance.lang = voice?.lang || "vi-VN";
     return utterance;
   }
 
@@ -75,28 +88,32 @@ export function useSpeech({ segments, defaultVoice, onStatus }: UseSpeechOptions
       onStatus("No segments available to play.");
       return;
     }
-    queueRef.current = segments
+    const queue = segments
       .filter((segment) => segment.selected)
       .map((segment) => ({ utterance: buildUtterance(segment), segmentId: segment.id }));
-    if (!queueRef.current.length) {
+    if (!queue.length) {
       onStatus("Select at least one segment to read.");
       return;
     }
+    generationRef.current += 1;
     globalThis.speechSynthesis.cancel();
+    queueRef.current = queue;
     onStatus(`Speaking ${queueRef.current.length} segment(s).`);
     playQueue();
   }
 
   function playSingle(segment: ScoredSegment): void {
-    queueRef.current = [{ utterance: buildUtterance(segment), segmentId: segment.id }];
+    generationRef.current += 1;
     globalThis.speechSynthesis.cancel();
+    queueRef.current = [{ utterance: buildUtterance(segment), segmentId: segment.id }];
     onStatus("Speaking selected segment.");
     playQueue();
   }
 
   function stop(): void {
-    globalThis.speechSynthesis.cancel();
+    generationRef.current += 1;
     queueRef.current = [];
+    globalThis.speechSynthesis.cancel();
     setSpeaking(false);
     setPaused(false);
     setCurrentReadingSegmentId(null);

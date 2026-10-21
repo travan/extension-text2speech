@@ -495,7 +495,8 @@ button:disabled {
   font-size: 0.78rem;
   color: #64748b;
   min-height: 1.2em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-height: 5.4em;
+  overflow-y: auto;
 }

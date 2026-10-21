@@ -232,3 +232,72 @@ test("topic options can be saved via Save link", async ({ page }) => {
   await page.locator(".save-topics-link").click();
   await expect(page.getByText("Saved topic option.")).toBeVisible();
 });
+
+test("local AI settings connect and filter without an OpenAI key", async ({ page }) => {
+  await installChromeMock(page);
+  await page.route("http://127.0.0.1:11434/api/tags", (route) => route.fulfill({
+    json: { models: [{ name: "qwen3.5:9b" }] },
+  }));
+  await page.route("http://127.0.0.1:11434/api/show", (route) => route.fulfill({
+    json: { capabilities: ["completion"] },
+  }));
+  await page.route("http://127.0.0.1:11434/api/chat", (route) => {
+    expect(route.request().headers()).not.toHaveProperty("authorization");
+    return route.fulfill({ json: {
+      message: { content: JSON.stringify({ scores: [{ id: 1, score: 0.9 }, { id: 2, score: 0.1 }] }) },
+    } });
+  });
+  await page.goto("http://127.0.0.1:4173/src/entrypoints/popup/index.html");
+  await page.getByLabel("Filter mode").selectOption("local");
+  await expect(page.getByLabel("OpenAI API key")).toHaveCount(0);
+  await page.getByRole("button", { name: "Check local AI" }).click();
+  await expect(page.getByRole("status")).toContainText("installed");
+  await page.getByRole("button", { name: "Scan", exact: true }).click();
+  await expect(page.locator("footer")).toContainText("Local AI: 2");
+  await page.getByRole("tab", { name: "Articles" }).click();
+  await expect(page.getByText("2 total · 1 accepted")).toBeVisible();
+});
+
+test("local AI failure visibly falls back to Basic", async ({ page }) => {
+  await installChromeMock(page);
+  await page.route("http://127.0.0.1:11434/api/chat", (route) => route.abort());
+  await page.goto("http://127.0.0.1:4173/src/entrypoints/popup/index.html");
+  await page.getByLabel("Filter mode").selectOption("local");
+  await page.getByRole("button", { name: "Scan", exact: true }).click();
+  await expect(page.locator("footer")).toContainText("dùng lọc cơ bản");
+  await page.getByRole("tab", { name: "Articles" }).click();
+  await expect(page.getByText("2 total · 2 accepted")).toBeVisible();
+});
+
+test("auto scan uses changed topics without toggling the timer", async ({ page }) => {
+  await installChromeMock(page);
+  await page.goto("http://127.0.0.1:4173/src/entrypoints/popup/index.html");
+  await page.getByLabel(/Auto scan/).check();
+  await page.getByRole("button", { name: "Scan", exact: true }).click();
+  await expect(page.locator("footer")).toContainText("2/2");
+  await page.getByLabel("Topics", { exact: true }).fill("astronomy");
+  await expect(page.locator("footer")).toContainText("Auto scan: 0/2", { timeout: 7000 });
+});
+
+test("delayed cancellation callbacks cannot restart speech or overwrite Stop", async ({ page }) => {
+  await installChromeMock(page);
+  await page.goto("http://127.0.0.1:4173/src/entrypoints/popup/index.html");
+  await page.evaluate(() => {
+    const synth = speechSynthesis;
+    const originalSpeak = synth.speak.bind(synth);
+    const originalCancel = synth.cancel.bind(synth);
+    let current: SpeechSynthesisUtterance | undefined;
+    synth.speak = (utterance) => { current = utterance; originalSpeak(utterance); };
+    synth.cancel = () => {
+      const cancelled = current;
+      originalCancel();
+      setTimeout(() => cancelled?.onerror?.({ error: "canceled" } as SpeechSynthesisErrorEvent), 10);
+    };
+  });
+  await page.getByRole("button", { name: "Scan", exact: true }).click();
+  await page.getByRole("button", { name: "▶ All" }).click();
+  await page.getByRole("button", { name: "⏹", exact: true }).click();
+  await expect(page.locator("footer")).toContainText("Stopped speaking.");
+  await page.getByLabel("Topics", { exact: true }).fill("changed while stopped");
+  await expect(page.locator("footer")).toContainText("Stopped speaking.");
+});
