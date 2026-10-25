@@ -18,3 +18,6 @@ coverage/
 
 # Reproducible verification runs (logs, traces, reports)
 artifacts/verification/
+
+# Keep Vite development output separate from the installed production extension
+.dev-extension/

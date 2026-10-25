@@ -1,6 +1,6 @@
 # Topic-Aware Text Reader (Chrome Extension)
 
-A Chrome Extension that scans visible content on any page, filters relevant segments by topic, and reads them aloud with configurable voices.
+A Chrome Extension that scans rendered text on supported webpages, filters relevant segments by topic, and reads them aloud with configurable voices.
 
 This repository contains the current React + TypeScript implementation and keeps legacy MVP files in a separate folder for side-by-side comparison.
 
@@ -99,7 +99,18 @@ and normal E2E suites use mocks and work without it.
 2. Enable Developer mode.
 3. Click Load unpacked.
 4. Select the `dist/` folder (after `npm run build`).
-5. Open any website and click the extension icon.
+5. Open a regular webpage and click the extension icon. Chrome opens an anchored
+   toolbar popup. Use **↗ Open reader window** only when you want a separate
+   window that keeps reading while you browse.
+
+After updating the build, click **Reload** for this extension in
+`chrome://extensions`. Scan can reinject its content script into already-open
+regular webpages without navigating them. Chrome internal/store pages and PDF
+viewers may prohibit extension access.
+
+`npm run dev` writes `.dev-extension/`; only `npm run build` writes `dist/`.
+Load `.dev-extension/` explicitly if you want the development server version.
+Running UI tests must not overwrite the installed production build.
 
 ## Usage Guide
 
@@ -110,6 +121,15 @@ and normal E2E suites use mocks and work without it.
 3. Click scan/filter, then click read.
 
 Topic input supports separators such as commas, semicolons, or new lines.
+Clear Topics to show all rendered text currently loaded in the document and its
+scroll containers. Scan includes short blocks, chat divs, headings, paragraphs,
+and open shadow DOM. It does not automatically scroll to load virtualized posts,
+open collapsed content, OCR images/canvas, or scan iframe documents. Keyword
+matching is accent-insensitive; related meanings require an AI mode. The footer
+separates total extracted blocks from blocks accepted by the filter.
+
+In the toolbar popup, closing it also stops speech. Use the optional reader
+window for continuous listening.
 
 ### Advanced AI Mode (Optional)
 
@@ -165,8 +185,9 @@ browser/device voices; the local model does not generate audio.
 - Speech quality depends on local browser/device `speechSynthesis` voices.
 - AI classification is probabilistic; the small local evaluation is a smoke
   benchmark, not a guarantee of accuracy on all sites.
-- Deep-scan levels currently do not control scrolling/expansion; only the
-  deep-scan toggle changes extraction. Automatic scrolling/clicking is disabled.
+- The current scanner always collects loaded rendered blocks. Legacy Deep-scan
+  controls do not change this scope or load more posts. Automatic scrolling and
+  clicking are disabled.
 - Captured feeds are capped at 5,000 records, but large records can still hit
   Chrome's storage quota.
 
@@ -231,3 +252,11 @@ volume. It runs separately from the default headless verification suite.
 
 To retain JSON, HTML and traces, set `VERIFICATION_DIR` to a new evidence folder
 when running the command.
+
+### Public website smoke tests
+
+Run `LIVE_WEBSITES=1 npm run test:extension -- tests/extension/websites.live.spec.ts`
+for real-page extraction and keyword checks on MDN, English/Vietnamese Wikipedia,
+and the public Chạm homepage. These use a temporary profile and depend on network
+availability. They check rendered paragraph coverage and filter results, not
+compatibility with every website or authenticated social feed.

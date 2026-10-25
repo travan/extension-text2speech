@@ -1,3 +1,4 @@
+import type { ScanScope } from "../../../services/renderedText";
 import { useEffect, useRef } from "react";
 
 import { expandTopicCandidates, parseTopics } from "../../../services/filters";
@@ -11,6 +12,7 @@ type FullTextResponse = { ok?: boolean; text?: string };
 
 interface UseScanOptions {
   activeTabId: number | null;
+  scope: ScanScope;
   settings: PopupSettings;
   openAiApiKey: string;
   segments: ScoredSegment[];
@@ -31,6 +33,7 @@ export interface UseScanReturn {
 
 export function useScan({
   activeTabId,
+  scope,
   settings,
   openAiApiKey,
   segments,
@@ -43,7 +46,7 @@ export function useScan({
   const inFlight = useRef(false);
   const latestScan = useRef(runScan);
   const lastScanKey = useRef("");
-  const currentConfig = JSON.stringify([activeTabId, settings, openAiApiKey]);
+  const currentConfig = JSON.stringify([activeTabId, scope, settings, openAiApiKey]);
   const configRef = useRef(currentConfig);
   useEffect(() => { latestScan.current = runScan; configRef.current = currentConfig; });
 
@@ -75,6 +78,7 @@ export function useScan({
     try {
       const response = await sendTabMessage<ExtractSegmentsResponse>(activeTabId, {
         type: "EXTRACT_SEGMENTS",
+        scope,
         exhaustive: settings.deepScanEnabled,
         deepScanLevel: settings.deepScanLevel,
       });
@@ -103,7 +107,7 @@ export function useScan({
       setScanSummary({ total: rawSegments.length, accepted: result.segments.length });
       setSegments((previous) => {
         const choices = new Map(previous.map((segment) => [segment.xpath, segment]));
-        return result.segments.map((segment) => ({
+        return (scope === "viewport" ? result.segments.toSorted((a, b) => a.id - b.id) : result.segments).map((segment) => ({
           ...segment,
           selected: choices.get(segment.xpath)?.selected ?? segment.selected,
           voice: choices.get(segment.xpath)?.voice ?? segment.voice,
@@ -116,7 +120,7 @@ export function useScan({
         setStatus(`Auto scan: ${result.segments.length}/${rawSegments.length}.${result.fallbackNote}`);
       } else {
         setStatus(
-          `Scan complete: ${result.segments.length}/${rawSegments.length} passed threshold.${result.fallbackNote}`,
+          `Scan complete: ${result.segments.length}/${rawSegments.length} passed threshold · ${scope === "viewport" ? "Current view" : "Loaded page"}.${result.fallbackNote}`,
         );
       }
     } catch (error) {
@@ -127,7 +131,7 @@ export function useScan({
       if (message.includes("not available") || message.includes("does not exist") || message.includes("connection")) {
         setStatus("Content script not ready — please reload the tab first.");
       } else {
-        setStatus("Scan failed. Reload tab or reopen popup and try again.");
+        setStatus(`Scan failed: ${message}`);
       }
     } finally {
       inFlight.current = false;
@@ -144,11 +148,12 @@ export function useScan({
     if (inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
-    setStatus("Scanning full page (no topic filter)...");
+    setStatus(`Scanning ${scope === "viewport" ? "current view" : "loaded page"} (no topic filter)...`);
 
     try {
       const response = await sendTabMessage<ExtractSegmentsResponse>(activeTabId, {
         type: "EXTRACT_SEGMENTS",
+        scope,
         exhaustive: settings.deepScanEnabled,
         deepScanLevel: settings.deepScanLevel,
       });
@@ -172,7 +177,7 @@ export function useScan({
       setScanSummary({ total: rawSegments.length, accepted: result.segments.length });
       setSegments(result.segments);
       setDetailSegmentId(null);
-      setStatus(`Full page scan: ${result.segments.length} segment(s).`);
+      setStatus(`Scan complete: ${result.segments.length} segment(s) · ${scope === "viewport" ? "Current view" : "Loaded page"} · No topic filter.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (message.includes("not available") || message.includes("does not exist") || message.includes("connection")) {
@@ -191,7 +196,7 @@ export function useScan({
   }
 
   async function hydrateFullText(segment: ScoredSegment): Promise<ScoredSegment> {
-    if (!activeTabId || !segment.xpath) {
+    if (scope === "viewport" || !activeTabId || !segment.xpath) {
       return segment;
     }
 

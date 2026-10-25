@@ -1,3 +1,4 @@
+import { collectRenderedText, type ScanScope } from "../../services/renderedText";
 import { expandTopicCandidates, lexicalTopicScore, getMatchedKeywords, normalizeWhitespace, normalizeForMatch, textToTokens, hasApproxTokenMatch, parseTopics as parseTopicInput } from "../../services/filters";
 
 const MIN_TEXT_LENGTH = 30;
@@ -528,7 +529,17 @@ async function prepareExhaustiveDomScan(rawLevel: unknown): Promise<void> {
 
 // ─── XPath ───────────────────────────────────────────────────────────────────
 
+const shadowNodes = new Map<string, Element>();
+const shadowKeys = new WeakMap<Element, string>();
+let shadowSequence = 0;
+
 function getXPath(element: Element): string {
+  if (element.getRootNode() instanceof ShadowRoot) {
+    const key = shadowKeys.get(element) ?? `shadow:${++shadowSequence}`;
+    shadowKeys.set(element, key);
+    shadowNodes.set(key, element);
+    return key;
+  }
   if (element.id) return `//*[@id="${element.id}"]`;
 
   const parts: string[] = [];
@@ -551,6 +562,7 @@ function getXPath(element: Element): string {
 
 function resolveNodeByXPath(xpath: string): Element | null {
   if (!xpath || typeof xpath !== "string") return null;
+  if (xpath.startsWith("shadow:")) return shadowNodes.get(xpath) ?? null;
   try {
     const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
     const node = result.singleNodeValue;
@@ -667,75 +679,13 @@ function mergeBrokenSegments(segments: Array<{ text: string; xpath: string }>): 
   return merged;
 }
 
-function extractRawSegments(options: { exhaustive?: boolean } = {}): RawSegment[] {
-  const exhaustive = options.exhaustive !== false;
-  const segments: Array<{ text: string; xpath: string; node: Element }> = [];
-  const visited = new Set<Element>();
-  const seenNodes = new Set<Element>();
-
-  const threadNodes = exhaustive ? [...document.querySelectorAll(THREAD_SELECTOR)] : [];
-  const blockNodes = [...document.querySelectorAll(BLOCK_SELECTOR)];
-  const hasThreadNodes = exhaustive && threadNodes.length > 0;
-  const nodes = hasThreadNodes ? threadNodes : blockNodes;
-
-  for (const node of nodes) {
-    const sourceNode = hasThreadNodes ? chooseFocusedThreadContentNode(node) : findBestContentRoot(node);
-    if (seenNodes.has(sourceNode)) continue;
-    seenNodes.add(sourceNode);
-    if (visited.has(sourceNode) || !isVisible(sourceNode)) continue;
-    const parent = sourceNode.parentElement;
-    if (parent && visited.has(parent)) continue;
-
-    const text = exhaustive
-      ? extractTextForNode(sourceNode)
-      : extractTextForNode(sourceNode);
-    if (text.length < MIN_TEXT_LENGTH) continue;
-
-    visited.add(sourceNode);
-    const xpath = getXPath(sourceNode);
-    // Cache full text BEFORE chunking so hydration can return the complete article.
+function extractRawSegments(options: { exhaustive?: boolean; scope?: ScanScope } = {}): RawSegment[] {
+  segmentFullTextCache.clear();
+  return collectRenderedText(document.body, options.scope).map(({ node, text }, id) => {
+    const xpath = getXPath(node);
     segmentFullTextCache.set(xpath, text);
-    const chunks = splitLongText(text, MAX_TEXT_LENGTH);
-    for (const chunk of chunks) {
-      if (chunk.length >= MIN_TEXT_LENGTH) segments.push({ text: chunk, xpath, node: sourceNode });
-    }
-  }
-
-  // Merge segments that belong to the same thread container before chunking dedup.
-  let containerMerged = mergeSegmentsByThreadContainer(segments);
-
-  // Fail-safe for platforms with unstable container semantics: if exhaustive scan
-  // yields nothing, retry with a broader legacy-style block set.
-  if (!containerMerged.length && exhaustive) {
-    const retrySegments: Array<{ text: string; xpath: string; node: Element }> = [];
-    const retryVisited = new Set<Element>();
-    const retrySeen = new Set<Element>();
-    const fallbackNodes = [...document.querySelectorAll(FALLBACK_BLOCK_SELECTOR)];
-
-    for (const node of fallbackNodes) {
-      const sourceNode = findBestContentRoot(node);
-      if (retrySeen.has(sourceNode)) continue;
-      retrySeen.add(sourceNode);
-      if (retryVisited.has(sourceNode) || !isVisible(sourceNode)) continue;
-      const parent = sourceNode.parentElement;
-      if (parent && retryVisited.has(parent)) continue;
-
-      const text = extractTextForNode(sourceNode);
-      if (text.length < MIN_TEXT_LENGTH) continue;
-
-      retryVisited.add(sourceNode);
-      const xpath = getXPath(sourceNode);
-      segmentFullTextCache.set(xpath, text);
-      const chunks = splitLongText(text, MAX_TEXT_LENGTH);
-      for (const chunk of chunks) {
-        if (chunk.length >= MIN_TEXT_LENGTH) retrySegments.push({ text: chunk, xpath, node: sourceNode });
-      }
-    }
-
-    containerMerged = mergeSegmentsByThreadContainer(retrySegments);
-  }
-
-  return mergeBrokenSegments(containerMerged).map((segment, index) => ({ ...segment, id: index }));
+    return { id, text, xpath };
+  });
 }
 
 // ─── Segment actions ──────────────────────────────────────────────────────────
@@ -911,7 +861,7 @@ async function getFullTextByXPath(xpath: string, textHint = ""): Promise<string>
     return segmentFullTextCache.get(xpath) ?? "";
   }
 
-  const freshText = extractTextForNode(node);
+  const freshText = collectRenderedText(node).map((item) => item.text).join(" ");
 
   // Return the longer of: live DOM text vs scan-time cache (picks up any extra
   // content that may have been captured during the initial full-page expansion).
@@ -1069,7 +1019,7 @@ function stopCapture(): void {
 
 chrome.runtime.onMessage.addListener(
   (
-    message: { type?: string; exhaustive?: boolean; deepScanLevel?: unknown; xpath?: string; textHint?: string; tabId?: number; topics?: string | string[]; threshold?: number },
+    message: { type?: string; scope?: ScanScope; exhaustive?: boolean; deepScanLevel?: unknown; xpath?: string; textHint?: string; tabId?: number; topics?: string | string[]; threshold?: number },
     _sender,
     sendResponse: (response: unknown) => void,
   ) => {
@@ -1079,7 +1029,8 @@ chrome.runtime.onMessage.addListener(
 
       (async () => {
         // Auto-scroll và auto-click đã bị tắt — dùng nút Refresh trong popup để chủ động scan
-        const raw = extractRawSegments({ exhaustive });
+        const scope = message.scope === "page" ? "page" : "viewport";
+        const raw = extractRawSegments({ exhaustive, scope });
         sendResponse({ ok: true, total: raw.length, segments: raw, exhaustive, deepScanLevel });
       })().catch((error: unknown) => {
         sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) });

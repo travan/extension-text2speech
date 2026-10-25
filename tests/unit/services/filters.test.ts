@@ -42,3 +42,9 @@ describe("filters", () => {
     expect(score).toBe(1);
   });
 });
+
+it('does not discard exact user keywords as stop words or one-letter tokens',()=>{
+  expect(lexicalTopicScore('đang',["đang"])).toBe(1);
+  expect(lexicalTopicScore('R',["R"])).toBe(1);
+  expect(lexicalTopicScore('công việc mới',["cong viec"])).toBe(1);
+});
