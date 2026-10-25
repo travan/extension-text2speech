@@ -1,13 +1,15 @@
 import { test as base, chromium, expect, type BrowserContext, type Page, type Worker } from "@playwright/test";
 import { createServer } from "node:http";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, cp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { AddressInfo } from "node:net";
 
 type App = { context: BrowserContext; worker: Worker; source: Page; reader: Page; tabId: number; origin: string };
-export const test = base.extend<{ app: App }>({
-  app: async ({}, use, testInfo) => {
+export const test = base.extend<{ app: App; manualInjection: boolean; headed: boolean }>({
+  manualInjection: [false, { option: true }],
+  headed: [process.env.NATIVE_SPEECH_HEADED === "1", { option: true }],
+  app: async ({ manualInjection, headed }, use, testInfo) => {
     const server = createServer((_request, response) => {
       response.setHeader("Content-Type", "text/html; charset=utf-8");
       response.end('<!doctype html><html><body><article><p>AI researchers build useful tools for processing natural language.</p></article><article><p>Fresh mangoes and oranges are available at the local market today.</p></article></body></html>');
@@ -16,9 +18,19 @@ export const test = base.extend<{ app: App }>({
     const profile = await mkdtemp(join(tmpdir(), "reader-verification-"));
     let context: BrowserContext | undefined;
     try {
-      const extension = resolve("dist");
+      let extension = resolve("dist");
+      if (manualInjection) {
+        extension = join(profile, "test-extension");
+        await cp(resolve("dist"), extension, { recursive: true });
+        const manifestPath = join(extension, "manifest.json");
+        const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+        // Keep the real bundle declared, but prevent automatic injection into
+        // this fixture so Scan must recover via the runtime injection path.
+        for (const script of manifest.content_scripts) script.matches = ["https://example.invalid/*"];
+        await writeFile(manifestPath, JSON.stringify(manifest));
+      }
       context = await chromium.launchPersistentContext(profile, {
-        channel: "chromium", headless: process.env.NATIVE_SPEECH_HEADED !== "1", viewport: { width: 420, height: 650 },
+        channel: "chromium", headless: !headed, viewport: { width: 420, height: 650 },
         args: ["--disable-extensions-except=" + extension, "--load-extension=" + extension],
       });
       await context.tracing.start({ screenshots: true, snapshots: true, sources: true });

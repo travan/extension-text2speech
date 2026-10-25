@@ -6,6 +6,8 @@ interface ArticlesTabProps {
   scanAccepted: number;
   currentReadingSegmentId: number | null;
   onRefresh: () => void;
+  onScanWithoutFilter: () => void;
+  busy: boolean;
   onUpdateSegment: (id: number, updater: (segment: ScoredSegment) => ScoredSegment) => void;
   onPlaySingle: (segment: ScoredSegment) => void;
   onFocus: (segment: ScoredSegment) => Promise<void>;
@@ -18,6 +20,8 @@ export function ArticlesTab({
   scanAccepted,
   currentReadingSegmentId,
   onRefresh,
+  onScanWithoutFilter,
+  busy,
   onUpdateSegment,
   onPlaySingle,
   onFocus,
@@ -27,10 +31,16 @@ export function ArticlesTab({
     <section className="segments-list">
       <div className="list-stats-row">
         <p className="list-stats">{scanTotal} total · {scanAccepted} accepted</p>
-        <button type="button" className="refresh-btn" onClick={onRefresh} title="Re-scan page">↻ Refresh</button>
+        <button type="button" className="refresh-btn" onClick={onRefresh} disabled={busy} title="Scan again at the source page’s current scroll position">↻ Refresh</button>
       </div>
+      {scanTotal > scanAccepted ? (
+        <div className="scan-filter-notice" role="status">
+          <p>{scanTotal - scanAccepted} text block(s) hidden by the topic filter. Missing the text you’re viewing?</p>
+          <button type="button" disabled={busy} onClick={onScanWithoutFilter}>Scan this area without topic filter</button>
+        </div>
+      ) : null}
       {segments.length === 0 ? (
-        <p className="empty-hint">No segments yet — run Scan first.</p>
+        <p className="empty-hint">{scanTotal > 0 ? "No matching text. Change Topics or lower the threshold, then Scan again." : "No text found yet — run Scan on a webpage. Clear Topics to show all loaded text."}</p>
       ) : null}
       {segments.map((segment) => (
         <article

@@ -96,13 +96,15 @@ export function SettingsTab({
 
   return (
     <section className="form-grid">
+      <div className="settings-intro"><span className="eyebrow">YOUR READING SPACE</span><h2>A little less scrolling.<br />A little more listening.</h2><p>Choose what matters. We’ll read it to you.</p></div>
+      <div className="section-caption"><span>01</span> Personalize your feed</div>
       <label htmlFor="topics">Topics</label>
       <textarea
         id="topics"
-        rows={3}
+        rows={2}
         value={settings.topics}
         onChange={(event) => onTopicsChange(event.target.value)}
-        placeholder="spirituality, ai, marketing"
+        placeholder="e.g. design, technology, wellbeing"
       />
       <small>
         {topicCount} topics detected ·{" "}
@@ -126,6 +128,7 @@ export function SettingsTab({
         </div>
       ) : null}
 
+      <details className="advanced-settings"><summary>Fine-tune your reading <span>Optional</span></summary><div className="advanced-content">
       <label htmlFor="threshold">Threshold: {settings.threshold.toFixed(2)}</label>
       <input
         id="threshold"
@@ -234,8 +237,9 @@ export function SettingsTab({
         ))}
       </div>
 
-      <hr className="section-divider" />
+      </div></details>
 
+      <details className="advanced-settings"><summary>Saved preferences & capture</summary><div className="advanced-content">
       <div className="action-row">
         <button type="button" onClick={() => void onSavePreset()}>Save preset</button>
         <button type="button" onClick={() => void onLoadPreset()}>Load preset</button>
@@ -254,6 +258,7 @@ export function SettingsTab({
         <button type="button" onClick={onOpenResults}>Results ↗</button>
       </div>
       <small>Feed capture uses Basic filtering. AI modes apply to Scan.</small>
+      </div></details>
     </section>
   );
 }

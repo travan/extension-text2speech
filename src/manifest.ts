@@ -8,11 +8,12 @@ export default defineManifest({
   permissions: ["activeTab", "scripting", "storage", "tabs", "windows"],
   host_permissions: ["<all_urls>"],
   background: {
-    service_worker: "src/entrypoints/background/index.ts",
+    service_worker: "src/entrypoints/background/background.ts",
     type: "module",
   },
   action: {
     default_title: "Topic Reader",
+    default_popup: "src/entrypoints/popup/index.html",
   },
   content_scripts: [
     {

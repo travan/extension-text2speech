@@ -4,9 +4,10 @@ import { defineConfig } from "vite";
 
 import manifest from "./src/manifest";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [crx({ manifest }), react()],
   build: {
+    outDir: command === "serve" ? ".dev-extension" : "dist",
     rollupOptions: {
       input: {
         popup: "src/entrypoints/popup/index.html",
@@ -14,4 +15,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

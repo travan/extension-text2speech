@@ -90,21 +90,18 @@ export function hasApproxTokenMatch(textTokens: Set<string>, token: string): boo
 
 export function lexicalTopicScore(text: string, topics: string[]): number {
   const textTokens = new Set(textToTokens(text));
-  if (!textTokens.size || !topics.length) {
+  if (!topics.length) {
     return 0;
   }
 
   let best = 0;
   for (const topic of topics) {
-    const topicTokens = textToTokens(topic);
-    if (!topicTokens.length) {
-      continue;
-    }
-
     if (containsTopicPhrase(text, topic)) {
       best = Math.max(best, 1);
       continue;
     }
+    const topicTokens = textToTokens(topic);
+    if (!topicTokens.length) continue;
 
     // Guard against false positives on short multi-word topics (e.g. "tu vi")
     // when only one short token appears in unrelated text.

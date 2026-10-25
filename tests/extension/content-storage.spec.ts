@@ -8,7 +8,7 @@ test("real extraction excludes hidden elements and does not duplicate nested art
     document.body.append(hidden);
   });
   const response = await app.worker.evaluate(async (tabId) =>
-    chrome.tabs.sendMessage(tabId, { type: "EXTRACT_SEGMENTS", exhaustive: true }), app.tabId);
+    chrome.tabs.sendMessage(tabId, { type: "EXTRACT_SEGMENTS", scope: "page", exhaustive: true }), app.tabId);
   expect(response.ok).toBe(true);
   expect(response.segments).toHaveLength(2);
   expect(new Set(response.segments.map((s: any) => s.text)).size).toBe(2);

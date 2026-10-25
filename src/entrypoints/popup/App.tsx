@@ -1,3 +1,4 @@
+import type { ScanScope } from "../../services/renderedText";
 import { useEffect, useMemo, useState } from "react";
 
 import { DEFAULT_SETTINGS, usePopupStore } from "../../stores/usePopupStore";
@@ -24,6 +25,7 @@ type View = "settings" | "list" | "detail";
 
 interface ScanSessionSnapshot {
   tabId: number;
+  scope: ScanScope;
   host: string;
   scan: { total: number; accepted: number };
   segments: ScoredSegment[];
@@ -71,6 +73,7 @@ export function PopupApp() {
 
   const [openAiApiKey, setOpenAiApiKey] = useState("");
   const [topicOptions, setTopicOptions] = useState<string[]>([]);
+  const [scope, setScope] = useState<ScanScope>("viewport");
   const [view, setView] = useState<View>("settings");
   const [hydrated, setHydrated] = useState(false);
 
@@ -96,6 +99,7 @@ export function PopupApp() {
 
   const scanOps = useScan({
     activeTabId,
+    scope,
     settings,
     openAiApiKey,
     segments,
@@ -133,13 +137,15 @@ export function PopupApp() {
           const hasSnapshot = snapshot
             && snapshot.tabId === tabId
             && Array.isArray(snapshot.segments)
-            && snapshot.host === host;
+            && snapshot.host === host
+            && (snapshot.scope === "viewport" || snapshot.scope === "page");
 
           if (hasSnapshot) {
+            setScope(snapshot.scope);
             setSegments(snapshot.segments);
             setScanSummary(snapshot.scan ?? { total: snapshot.segments.length, accepted: snapshot.segments.length });
             setDetailSegmentId(snapshot.detailSegmentId ?? null);
-            setStatus(`Restored ${snapshot.scan?.accepted ?? snapshot.segments.length} article(s).`);
+            setStatus(`Restored ${snapshot.scan?.accepted ?? snapshot.segments.length} article(s) from a previous scan. Scan again after scrolling.`);
             return;
           }
         }
@@ -177,6 +183,7 @@ export function PopupApp() {
     const timer = globalThis.setTimeout(() => {
       const snapshot: ScanSessionSnapshot = {
         tabId: activeTabId,
+        scope,
         host: activeHost,
         scan,
         segments,
@@ -187,7 +194,7 @@ export function PopupApp() {
     }, 180);
 
     return () => globalThis.clearTimeout(timer);
-  }, [hydrated, activeTabId, activeHost, scan, segments, detailSegmentId]);
+  }, [hydrated, activeTabId, activeHost, scope, scan, segments, detailSegmentId]);
 
   function rememberCurrentTopicsAsOption(): void {
     const normalized = parseTopics(settings.topics).join(", ");
@@ -257,8 +264,7 @@ export function PopupApp() {
   }
 
   function handleScanClick(): void {
-    const scanFn = view === "detail" ? scanOps.runScanFullPage : scanOps.runScan;
-    scanFn().catch(() => {
+    scanOps.runScan().catch(() => {
       setStatus("Unexpected error while scanning.");
       setBusy(false);
     });
@@ -270,12 +276,22 @@ export function PopupApp() {
     void scanOps.hydrateFullText(segment);
   }
 
+  async function openReaderWindow(): Promise<void> {
+    if (!activeTabId) return;
+    try {
+      const result = await chrome.runtime.sendMessage({ type: "OPEN_READER_WINDOW", tabId: activeTabId });
+      if (!result?.ok) throw new Error(result?.error || "Cannot open reader window");
+      window.close();
+    } catch { setStatus("Cannot open reader window. Try again."); }
+  }
+
   return (
     <main className="popup-root">
       <header className="popup-header">
         <div className="header-row">
-          <h1>Topic Reader</h1>
+          <span className="brand-mark" aria-hidden="true">◖</span><h1>Topic<span>reader</span></h1>
           <span className="host-badge" title={domainHost ?? "no domain"}>{domainHost ?? "—"}</span>
+          <button type="button" onClick={() => void openReaderWindow()} className="window-btn" title="Open a separate window to keep reading while browsing" aria-label="Open reader window">↗</button>
           <button type="button" className="close-btn" onClick={handleClose} title="Close and clear session">✕</button>
         </div>
         <nav className="tab-nav" role="tablist">
@@ -285,7 +301,7 @@ export function PopupApp() {
           <button type="button" role="tab" aria-selected={view === "list"} className={`tab-btn${view === "list" ? " active" : ""}`} onClick={() => setView("list")}>
             Articles{segments.length > 0 ? <span className="tab-badge">{segments.length}</span> : null}
           </button>
-          <button type="button" role="tab" aria-selected={view === "detail"} className={`tab-btn${view === "detail" ? " active" : ""}`} onClick={() => setView("detail")} disabled={!detailSegmentId}>
+          <button type="button" role="tab" aria-selected={view === "detail"} className={`tab-btn${view === "detail" ? " active" : ""}`} onClick={() => setView("detail")} disabled={detailSegmentId === null}>
             Detail
           </button>
         </nav>
@@ -330,6 +346,8 @@ export function PopupApp() {
             scanAccepted={scan.accepted}
             currentReadingSegmentId={speech.currentReadingSegmentId}
             onRefresh={handleScanClick}
+            busy={busy}
+            onScanWithoutFilter={() => void scanOps.runScanFullPage()}
             onUpdateSegment={scanOps.updateSegment}
             onPlaySingle={speech.playSingle}
             onFocus={scanOps.focusInTab}
@@ -351,6 +369,16 @@ export function PopupApp() {
       </div>
 
       <SpeechBar
+        scope={scope}
+        onScopeChange={(next) => {
+          speech.stop();
+          setScope(next);
+          setSegments([]);
+          setScanSummary({ total: 0, accepted: 0 });
+          setDetailSegmentId(null);
+          setStatus("Scan scope changed. Click Scan to collect text in this area.");
+          if (view === "detail") setView("list");
+        }}
         busy={busy}
         canPlay={segments.length > 0}
         speaking={speech.speaking}
