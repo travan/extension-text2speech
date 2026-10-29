@@ -115,21 +115,21 @@ test("speech play/pause/resume/stop controls update status", async ({ page }) =>
   await expect(page.getByText("AI is transforming the world")).toBeVisible();
 
   // Pause and Stop should be reachable from the actions toolbar.
-  await expect(page.getByRole("button", { name: "⏸", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "⏹", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pause reading", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Stop reading", exact: true })).toBeVisible();
 
   // Click Read all — with the stub, speaking starts then finishes quickly.
   await page.getByRole("button", { name: "▶ All" }).click();
 
   // Pause while speaking.
-  await page.getByRole("button", { name: "⏸", exact: true }).click();
+  await page.getByRole("button", { name: "Pause reading", exact: true }).click();
   await expect(page.getByText("Paused.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Resume reading", exact: true })).toBeVisible();
 
   // Resume and then stop.
-  await page.getByRole("button", { name: "Resume" }).click();
+  await page.getByRole("button", { name: "Resume reading", exact: true }).click();
   await expect(page.getByText("Resumed.")).toBeVisible();
-  await page.getByRole("button", { name: "⏹", exact: true }).click();
+  await page.getByRole("button", { name: "Stop reading", exact: true }).click();
   await expect(page.locator("footer")).toContainText(/Stopped speaking\.|Read completed\./i);
 });
 
@@ -296,7 +296,7 @@ test("delayed cancellation callbacks cannot restart speech or overwrite Stop", a
   });
   await page.getByRole("button", { name: "Scan", exact: true }).click();
   await page.getByRole("button", { name: "▶ All" }).click();
-  await page.getByRole("button", { name: "⏹", exact: true }).click();
+  await page.getByRole("button", { name: "Stop reading", exact: true }).click();
   await expect(page.locator("footer")).toContainText("Stopped speaking.");
   await page.getByLabel("Topics", { exact: true }).fill("changed while stopped");
   await expect(page.locator("footer")).toContainText("Stopped speaking.");

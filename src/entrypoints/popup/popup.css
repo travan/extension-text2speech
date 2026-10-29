@@ -608,3 +608,18 @@ input[type="checkbox"] { width: 16px; height: 16px; }
 html { border-radius: 0 0 18px 18px; overflow: hidden; background: transparent; }
 body, .popup-root { border-radius: 0 0 18px 18px; overflow: hidden; }
 .speech-bar { border-radius: 0 0 18px 18px; }
+
+/* Keep the spoken text visible, including the position held while paused. */
+.segment-text.reading-text {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+.reading-text mark {
+  background: #fde68a;
+  color: #172b4d;
+  border-radius: 3px;
+  box-decoration-break: clone;
+}
+.is-paused .reading-badge { animation: none; }
+.detail-text.reading-text { background: #edf3fe; }

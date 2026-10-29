@@ -1,3 +1,4 @@
+import { ReadingText } from "./ReadingText";
 import type { ScoredSegment } from "../../../services/scan";
 
 interface ArticlesTabProps {
@@ -5,6 +6,8 @@ interface ArticlesTabProps {
   scanTotal: number;
   scanAccepted: number;
   currentReadingSegmentId: number | null;
+  readingRange: { start: number; end: number } | null;
+  paused: boolean;
   onRefresh: () => void;
   onScanWithoutFilter: () => void;
   busy: boolean;
@@ -19,6 +22,8 @@ export function ArticlesTab({
   scanTotal,
   scanAccepted,
   currentReadingSegmentId,
+  readingRange,
+  paused,
   onRefresh,
   onScanWithoutFilter,
   busy,
@@ -45,12 +50,13 @@ export function ArticlesTab({
       {segments.map((segment) => (
         <article
           key={segment.id}
-          className={`segment-card${currentReadingSegmentId === segment.id ? " is-reading" : ""}`}
+          className={`segment-card${currentReadingSegmentId === segment.id ? " is-reading" : ""}${currentReadingSegmentId === segment.id && paused ? " is-paused" : ""}`}
+          aria-current={currentReadingSegmentId === segment.id ? "true" : undefined}
         >
           <div className="segment-head">
             <strong className="score-badge">{Math.round(segment.score * 100)}%</strong>
             {currentReadingSegmentId === segment.id ? (
-              <span className="reading-badge">Reading…</span>
+              <span className="reading-badge">{paused ? "Paused" : "Reading…"}</span>
             ) : null}
             <label className="segment-check">
               <input
@@ -63,12 +69,12 @@ export function ArticlesTab({
               <span>Include</span>
             </label>
           </div>
-          <p className="segment-text">{segment.text}</p>
+          <ReadingText text={segment.text} active={currentReadingSegmentId === segment.id} range={readingRange} className="segment-text" />
           {segment.matchedKeywords.length > 0 ? (
             <p className="segment-keywords">Keywords: {segment.matchedKeywords.join(", ")}</p>
           ) : null}
           <div className="segment-actions">
-            <button type="button" onClick={() => onPlaySingle(segment)}>▶ Read</button>
+            <button type="button" onClick={() => onPlaySingle(segment)}>{currentReadingSegmentId === segment.id && paused ? "▶ Resume" : "▶ Read"}</button>
             <button type="button" onClick={() => void onFocus(segment)}>Focus</button>
             <button type="button" onClick={() => onOpenDetail(segment)}>Detail →</button>
           </div>

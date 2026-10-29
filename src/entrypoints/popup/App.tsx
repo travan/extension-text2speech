@@ -345,6 +345,8 @@ export function PopupApp() {
             scanTotal={scan.total}
             scanAccepted={scan.accepted}
             currentReadingSegmentId={speech.currentReadingSegmentId}
+            readingRange={speech.readingRange}
+            paused={speech.paused}
             onRefresh={handleScanClick}
             busy={busy}
             onScanWithoutFilter={() => void scanOps.runScanFullPage()}
@@ -358,6 +360,8 @@ export function PopupApp() {
         {view === "detail" && (
           <DetailTab
             detailSegment={detailSegment}
+            currentReadingSegmentId={speech.currentReadingSegmentId}
+            readingRange={speech.readingRange}
             voiceOptions={speech.voiceOptions}
             onBack={() => setView("list")}
             onHydrate={scanOps.hydrateFullText}
@@ -383,6 +387,8 @@ export function PopupApp() {
         canPlay={segments.length > 0}
         speaking={speech.speaking}
         paused={speech.paused}
+        canNext={speech.canNext}
+        onNext={speech.next}
         status={status}
         defaultVoice={settings.defaultVoice}
         voiceOptions={speech.voiceOptions}

@@ -1,3 +1,4 @@
+import { ReadingText } from "./ReadingText";
 import type { ScoredSegment } from "../../../services/scan";
 
 interface VoiceOption {
@@ -7,6 +8,8 @@ interface VoiceOption {
 
 interface DetailTabProps {
   detailSegment: ScoredSegment | null;
+  currentReadingSegmentId: number | null;
+  readingRange: { start: number; end: number } | null;
   voiceOptions: VoiceOption[];
   onBack: () => void;
   onHydrate: (segment: ScoredSegment) => Promise<ScoredSegment>;
@@ -17,6 +20,8 @@ interface DetailTabProps {
 
 export function DetailTab({
   detailSegment,
+  currentReadingSegmentId,
+  readingRange,
   voiceOptions,
   onBack,
   onHydrate,
@@ -47,7 +52,7 @@ export function DetailTab({
           <p className="segment-keywords">Keywords: {detailSegment.matchedKeywords.join(", ")}</p>
         ) : null}
       </div>
-      <p className="detail-text">{detailSegment.text}</p>
+      <ReadingText text={detailSegment.text} active={currentReadingSegmentId === detailSegment.id} range={readingRange} className="detail-text" />
       <div className="detail-actions">
         <button
           type="button"
