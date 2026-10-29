@@ -128,6 +128,13 @@ open collapsed content, OCR images/canvas, or scan iframe documents. Keyword
 matching is accent-insensitive; related meanings require an AI mode. The footer
 separates total extracted blocks from blocks accepted by the filter.
 
+Use **▶ All** to read included articles in order. **Next ⏭** skips to the next
+included article; **Read** on an article jumps there and continues through the
+remaining included articles. The active article expands and follows the spoken
+text. Voices that provide boundary events also highlight the current word.
+**Pause** holds the current position and highlight; **Resume** (including the
+Play button while paused) continues the same utterance. **Stop** clears the queue.
+
 In the toolbar popup, closing it also stops speech. Use the optional reader
 window for continuous listening.
 

@@ -11,6 +11,8 @@ interface SpeechBarProps {
   canPlay: boolean;
   speaking: boolean;
   paused: boolean;
+  canNext: boolean;
+  onNext: () => void;
   status: string;
   defaultVoice: string;
   voiceOptions: VoiceOption[];
@@ -28,6 +30,8 @@ export function SpeechBar({
   canPlay,
   speaking,
   paused,
+  canNext,
+  onNext,
   status,
   defaultVoice,
   voiceOptions,
@@ -49,10 +53,11 @@ export function SpeechBar({
         <button type="button" className="btn-scan" onClick={onScan} disabled={busy}>
           {busy ? "…" : "Scan"}
         </button>
-        <button type="button" onClick={onPlayAll} disabled={!canPlay}>▶ All</button>
+        <button type="button" onClick={onPlayAll} disabled={!canPlay && !speaking}>{paused ? "▶ Resume" : speaking ? "▶ Playing" : "▶ All"}</button>
         <button type="button" onClick={onTogglePause} disabled={!speaking} aria-label={paused ? "Resume reading" : "Pause reading"}>
           {paused ? "Resume" : "⏸"}
         </button>
+        <button type="button" onClick={onNext} disabled={!canNext} aria-label="Next segment" title="Skip to the next included segment">Next ⏭</button>
         <button type="button" onClick={onStop} disabled={!speaking} aria-label="Stop reading">⏹</button>
         <select
           className="voice-select"

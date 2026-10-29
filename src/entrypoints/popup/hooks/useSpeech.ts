@@ -15,6 +15,9 @@ export interface UseSpeechReturn {
   speaking: boolean;
   paused: boolean;
   currentReadingSegmentId: number | null;
+  readingRange: { start: number; end: number } | null;
+  canNext: boolean;
+  next: () => void;
   playAll: () => void;
   playSingle: (segment: ScoredSegment) => void;
   stop: () => void;
@@ -28,6 +31,10 @@ export function useSpeech({ segments, defaultVoice, onStatus }: UseSpeechOptions
   const [currentReadingSegmentId, setCurrentReadingSegmentId] = useState<number | null>(null);
   const queueRef = useRef<Array<{ utterance: SpeechSynthesisUtterance; segmentId: number }>>([]);
   const generationRef = useRef(0);
+  const pausedRef = useRef(false);
+  const endedWhilePausedRef = useRef(false);
+  const [readingRange, setReadingRange] = useState<{ start: number; end: number } | null>(null);
+  const [canNext, setCanNext] = useState(false);
 
   const voiceOptions = useMemo(() => buildVoiceOptions(voices), [voices]);
 
@@ -53,6 +60,8 @@ export function useSpeech({ segments, defaultVoice, onStatus }: UseSpeechOptions
       setSpeaking(false);
       setPaused(false);
       setCurrentReadingSegmentId(null);
+      setReadingRange(null);
+      setCanNext(false);
       onStatus("Read completed.");
       return;
     }
@@ -60,7 +69,23 @@ export function useSpeech({ segments, defaultVoice, onStatus }: UseSpeechOptions
     setSpeaking(true);
     setPaused(false);
     setCurrentReadingSegmentId(next.segmentId);
-    next.utterance.onend = () => playQueue(generation);
+    setReadingRange(null);
+    setCanNext(queueRef.current.length > 0);
+    pausedRef.current = false;
+    endedWhilePausedRef.current = false;
+    next.utterance.onboundary = (event) => {
+      if (generation !== generationRef.current || pausedRef.current) return;
+      const start = event.charIndex;
+      const text = next.utterance.text;
+      if (start < 0 || start >= text.length) return;
+      const length = event.charLength > 0 ? event.charLength : (text.slice(start).match(/^\S+/)?.[0].length || 1);
+      setReadingRange({ start, end: Math.min(text.length, start + length) });
+    };
+    next.utterance.onend = () => {
+      if (generation !== generationRef.current) return;
+      if (pausedRef.current) { endedWhilePausedRef.current = true; return; }
+      playQueue(generation);
+    };
     next.utterance.onerror = () => {
       if (generation !== generationRef.current) return;
       generationRef.current += 1;
@@ -68,6 +93,9 @@ export function useSpeech({ segments, defaultVoice, onStatus }: UseSpeechOptions
       setSpeaking(false);
       setPaused(false);
       setCurrentReadingSegmentId(null);
+      setReadingRange(null);
+      setCanNext(false);
+      pausedRef.current = false;
       onStatus("Speech failed. Try another voice.");
     };
     globalThis.speechSynthesis.speak(next.utterance);
@@ -84,6 +112,10 @@ export function useSpeech({ segments, defaultVoice, onStatus }: UseSpeechOptions
   }
 
   function playAll(): void {
+    if (speaking) {
+      if (pausedRef.current) togglePause();
+      return;
+    }
     if (segments.length === 0) {
       onStatus("No segments available to play.");
       return;
@@ -97,16 +129,35 @@ export function useSpeech({ segments, defaultVoice, onStatus }: UseSpeechOptions
     }
     generationRef.current += 1;
     globalThis.speechSynthesis.cancel();
+    globalThis.speechSynthesis.resume();
     queueRef.current = queue;
     onStatus(`Speaking ${queueRef.current.length} segment(s).`);
     playQueue();
   }
 
   function playSingle(segment: ScoredSegment): void {
+    if (speaking && currentReadingSegmentId === segment.id) {
+      if (pausedRef.current) togglePause();
+      return;
+    }
     generationRef.current += 1;
     globalThis.speechSynthesis.cancel();
-    queueRef.current = [{ utterance: buildUtterance(segment), segmentId: segment.id }];
-    onStatus("Speaking selected segment.");
+    globalThis.speechSynthesis.resume();
+    const index = segments.findIndex((item) => item.id === segment.id);
+    const following = index < 0 ? [] : segments.slice(index + 1).filter((item) => item.selected);
+    queueRef.current = [segment, ...following].map((item) => ({
+      utterance: buildUtterance(item), segmentId: item.id,
+    }));
+    onStatus("Speaking from selected segment.");
+    playQueue();
+  }
+
+  function next(): void {
+    if (!speaking || !queueRef.current.length) return;
+    generationRef.current += 1;
+    globalThis.speechSynthesis.cancel();
+    globalThis.speechSynthesis.resume();
+    onStatus("Speaking next segment.");
     playQueue();
   }
 
@@ -117,6 +168,10 @@ export function useSpeech({ segments, defaultVoice, onStatus }: UseSpeechOptions
     setSpeaking(false);
     setPaused(false);
     setCurrentReadingSegmentId(null);
+    setReadingRange(null);
+    setCanNext(false);
+    pausedRef.current = false;
+    endedWhilePausedRef.current = false;
     onStatus("Stopped speaking.");
   }
 
@@ -124,16 +179,23 @@ export function useSpeech({ segments, defaultVoice, onStatus }: UseSpeechOptions
     if (!speaking) {
       return;
     }
-    if (paused) {
+    if (pausedRef.current) {
+      pausedRef.current = false;
       globalThis.speechSynthesis.resume();
+      if (endedWhilePausedRef.current) {
+        endedWhilePausedRef.current = false;
+        playQueue();
+        return;
+      }
       setPaused(false);
       onStatus("Resumed.");
     } else {
+      pausedRef.current = true;
       globalThis.speechSynthesis.pause();
       setPaused(true);
       onStatus("Paused.");
     }
   }
 
-  return { voices, voiceOptions, speaking, paused, currentReadingSegmentId, playAll, playSingle, stop, togglePause };
+  return { voices, voiceOptions, speaking, paused, currentReadingSegmentId, readingRange, canNext, next, playAll, playSingle, stop, togglePause };
 }
